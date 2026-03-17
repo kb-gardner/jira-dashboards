@@ -1,0 +1,12 @@
+{
+  "name": "jira-sprint-dashboard",
+  "version": "1.0.0",
+  "description": "Sprint allocation dashboard for Jira",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

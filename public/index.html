@@ -1,0 +1,1044 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sprint Allocation Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F8FAFC;
+    --surface: #FFFFFF;
+    --surface2: #F1F5F9;
+    --border: #E2E8F0;
+    --accent: #2563EB;
+    --accent2: #475569;
+    --accent3: #94A3B8;
+    --text: #1E293B;
+    --muted: #64748B;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    min-height: 100vh;
+    padding: 40px 32px;
+  }
+
+  #config-banner {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 32px;
+    margin-bottom: 32px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    animation: fadeUp 0.4s ease both;
+  }
+
+  #config-banner h2 { font-size: 15px; font-weight: 700; color: var(--text); margin-bottom: 20px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  .config-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; margin-bottom: 20px; }
+
+  .config-field label { display: block; font-size: 11px; font-family: 'IBM Plex Mono', monospace; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+
+  .config-field input {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  .config-field input:focus { border-color: var(--accent); }
+  .config-field input::placeholder { color: var(--muted); }
+
+  .config-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+  .btn { padding: 10px 22px; border-radius: 8px; font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; border: none; transition: all 0.15s; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: #1D4ED8; }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--muted); }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+
+  #config-error { margin-top: 12px; font-size: 12px; font-family: 'IBM Plex Mono', monospace; color: #B05050; display: none; }
+
+  #config-note { margin-top: 14px; font-size: 11px; font-family: 'IBM Plex Mono', monospace; color: var(--muted); background: var(--surface2); border-radius: 8px; padding: 10px 14px; line-height: 1.7; }
+  #config-note a { color: var(--accent); }
+
+  header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 40px; flex-wrap: wrap; gap: 16px; }
+  .logo-area h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.3px; color: var(--text); }
+  .logo-area h1 span { color: var(--accent); }
+  .logo-area p { margin-top: 4px; font-size: 13px; color: var(--muted); font-family: 'IBM Plex Mono', monospace; }
+  .header-right { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+  #loading-overlay { display: none; align-items: center; justify-content: center; gap: 12px; padding: 80px; font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: var(--muted); }
+
+  .spinner { width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+
+  .sprint-selector { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+
+  .sprint-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 5px 12px;
+    border-radius: 6px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .sprint-btn.active, .sprint-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 500; }
+
+
+  #team-tabs {
+    gap: 4px;
+    margin-bottom: 24px;
+    padding: 4px;
+    background: var(--surface2);
+    border-radius: 10px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #team-tabs::-webkit-scrollbar { height: 4px; }
+  #team-tabs::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .team-tab {
+    padding: 8px 18px;
+    border-radius: 8px;
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--muted);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s;
+  }
+
+  .team-tab:hover { color: var(--text); background: rgba(255,255,255,0.6); }
+
+  .team-tab.active {
+    background: var(--surface);
+    color: var(--accent);
+    font-weight: 600;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+
+
+  .team-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    animation: fadeUp 0.5s ease both;
+  }
+
+  .team-section-header {
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .team-section-header h2 {
+    font-size: 15px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--accent);
+  }
+
+  .team-section-header .team-member-count {
+    font-size: 11px;
+    font-family: 'IBM Plex Mono', monospace;
+    color: var(--muted);
+  }
+
+  .team-inner-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+  }
+
+  .team-sub-section {
+    padding: 0;
+  }
+
+  .team-sub-section:first-child {
+    border-right: 1px solid var(--border);
+  }
+
+  .team-sub-header {
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .bar-legend {
+    font-weight: 400;
+    font-size: 10px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-family: 'IBM Plex Mono', monospace;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+
+  .legend-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+    margin-left: 6px;
+  }
+
+  .team-sub-content {
+    padding: 12px 0;
+  }
+
+
+  .bar-row { display: flex; align-items: center; gap: 12px; padding: 5px 20px; }
+
+  .bar-label {
+    width: 130px;
+    flex-shrink: 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .bar-track {
+    flex: 1;
+    height: 22px;
+    background: var(--surface2);
+    border-radius: 6px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .bar-fill {
+    height: 100%;
+    border-radius: 6px;
+    transition: width 0.8s cubic-bezier(0.16,1,0.3,1);
+    min-width: 2px;
+  }
+
+  .bar-fill-stacked {
+    height: 100%;
+    border-radius: 6px;
+    display: flex;
+    overflow: hidden;
+    transition: width 0.8s cubic-bezier(0.16,1,0.3,1);
+  }
+
+  .bar-segment {
+    height: 100%;
+    transition: width 0.8s cubic-bezier(0.16,1,0.3,1);
+  }
+
+  .bar-value {
+    min-width: 50px;
+    text-align: right;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+  }
+
+  .bar-empty {
+    padding: 20px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 13px;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+
+
+  .team-attention {
+    border-top: 1px solid var(--border);
+  }
+
+  .team-attention-header {
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text);
+  }
+
+  .risk-item { padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); }
+  .risk-item:last-child { border-bottom: none; }
+  .risk-name { font-size: 13px; font-weight: 600; color: var(--text); }
+  .risk-detail { font-size: 12px; font-family: 'IBM Plex Mono', monospace; color: var(--muted); }
+  .risk-reason { font-family: 'IBM Plex Mono', monospace; font-size: 11px; padding: 3px 9px; border-radius: 6px; background: rgba(37,99,235,0.08); color: var(--accent); white-space: nowrap; }
+  .attention-ok { padding: 14px 20px; color: var(--muted); font-size: 12px; font-family: 'IBM Plex Mono', monospace; }
+
+  .last-refreshed { font-size: 11px; font-family: 'IBM Plex Mono', monospace; color: var(--muted); padding: 10px 24px; border-top: 1px solid var(--border); text-align: right; }
+
+  @keyframes fadeUp { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+
+  @media (max-width: 900px) { .team-inner-grid { grid-template-columns: 1fr; } .team-sub-section:first-child { border-right: none; border-bottom: 1px solid var(--border); } }
+  @media (max-width: 700px) { body { padding: 24px 16px; } }
+
+  #dashboard { display: none; }
+</style>
+</head>
+<body>
+
+<!-- CONFIG -->
+<div id="config-banner">
+  <h2>Jira Configuration</h2>
+  <div class="config-grid">
+    <div class="config-field">
+      <label>Jira Base URL</label>
+      <input id="cfg-url" type="text" placeholder="https://yourcompany.atlassian.net" />
+    </div>
+    <div class="config-field">
+      <label>Email</label>
+      <input id="cfg-email" type="text" placeholder="you@company.com" />
+    </div>
+    <div class="config-field">
+      <label>API Token</label>
+      <input id="cfg-token" type="password" placeholder="Atlassian API token" />
+    </div>
+    <div class="config-field">
+      <label>Project Key</label>
+      <input id="cfg-project" type="text" placeholder="e.g. ENG" />
+    </div>
+  </div>
+  <div class="config-actions">
+    <button class="btn btn-primary" id="btn-load">Load Sprint Data</button>
+    <button class="btn btn-ghost"  id="btn-demo">Use Demo Data</button>
+  </div>
+  <div id="config-error"></div>
+  <div id="config-note">
+    <strong>API Token:</strong> Generate at <a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank">id.atlassian.com &rarr; Security &rarr; API Tokens</a><br>
+    Credentials are only sent to your Jira instance via the built-in proxy. Nothing is stored or persisted.
+  </div>
+  <div id="config-server-auth" style="display:none;margin-top:14px;font-size:11px;font-family:'IBM Plex Mono',monospace;color:var(--muted);background:var(--surface2);border-radius:8px;padding:10px 14px;line-height:1.7;">
+    Server-side authentication is configured. Credentials are managed via environment variables.
+  </div>
+</div>
+
+<!-- LOADING -->
+<div id="loading-overlay">
+  <div class="spinner"></div>
+  <span id="loading-msg">Fetching sprint data from Jira...</span>
+</div>
+
+<!-- DASHBOARD -->
+<div id="dashboard">
+  <header>
+    <div class="logo-area">
+      <h1>Sprint <span>Allocation</span></h1>
+      <p id="sprint-label">&mdash;</p>
+    </div>
+    <div class="header-right">
+      <div class="sprint-selector" id="sprint-selector"></div>
+      <button class="btn btn-ghost" id="btn-reconfigure" style="font-size:12px;padding:8px 14px">Reconfigure</button>
+    </div>
+  </header>
+
+  <div id="team-tabs" style="display:none"></div>
+  <div id="teams-container"></div>
+  <div class="last-refreshed" id="last-refreshed"></div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────
+const DEFAULTS = {
+  baseUrl:          '',
+  email:            '',
+  apiToken:         '',
+  projectKey:       '',
+  corsProxy:        '/proxy/',
+  storyPointsField: 'customfield_10038',
+  orgId:            '',
+  siteId:           '',
+};
+// ─────────────────────────────────────────────────────────────────
+
+function fmt(n) { return Number.isInteger(n) ? String(n) : n.toFixed(1); }
+
+const BAR_COLORS = { done: '#22C55E', inprog: '#F59E0B', todo: '#CBD5E1' };
+
+// ── Global state ─────────────────────────────────────────────────
+
+let activeCfg = null, activeBoardId = null, issuesCache = {};
+let backlogByPerson = {};       // { name: pts }
+let allContributors = new Set();
+let teamsByPerson = {};         // { personName: ['Team A', 'Team B'] }
+let allTeamNames = [];          // sorted team names
+let accountIdToName = {};       // { accountId: displayName } for team member resolution
+let activeTeamTab = null;       // currently selected team tab
+let serverConfig = null;        // populated from /config endpoint
+
+// ── Jira API ─────────────────────────────────────────────────────
+
+function jiraFetch(cfg, apiPath, opts = {}) {
+  const url = `${cfg.corsProxy}${cfg.baseUrl.replace(/\/$/,'')}${apiPath}`;
+  const headers = {
+    'Accept': 'application/json',
+    'X-Requested-With': 'XMLHttpRequest',
+    ...opts.headers,
+  };
+  if (!(serverConfig && serverConfig.hasAuth)) {
+    headers['Authorization'] = 'Basic ' + btoa(`${cfg.email}:${cfg.apiToken}`);
+  }
+  return fetch(url, { method: opts.method || 'GET', headers, body: opts.body }).then(async r => {
+    if (!r.ok) { const t = await r.text(); throw new Error(`Jira ${r.status}: ${t.slice(0,300)}`); }
+    return r.json();
+  });
+}
+
+async function getSprints(cfg) {
+  setLoadingMsg('Finding boards...');
+  const boards = await jiraFetch(cfg, `/rest/agile/1.0/board?projectKeyOrId=${cfg.projectKey}&maxResults=50`);
+  if (!boards.values?.length) throw new Error(`No boards found for project "${cfg.projectKey}"`);
+  const boardId = boards.values[0].id;
+  setLoadingMsg('Loading sprints...');
+  const data = await jiraFetch(cfg, `/rest/agile/1.0/board/${boardId}/sprint?state=active,closed&maxResults=20`);
+  const sprints = (data.values || []).reverse().slice(0, 5);
+  if (!sprints.length) throw new Error('No sprints found on this board');
+  return { boardId, sprints };
+}
+
+async function getIssues(cfg, boardId, sprintId) {
+  setLoadingMsg('Loading sprint issues...');
+  let issues = [], startAt = 0;
+  while (true) {
+    const data = await jiraFetch(cfg,
+      `/rest/agile/1.0/board/${boardId}/sprint/${sprintId}/issue?maxResults=100&startAt=${startAt}&fields=assignee,status,${cfg.storyPointsField},summary`);
+    issues = issues.concat(data.issues || []);
+    if (issues.length >= data.total || !(data.issues?.length)) break;
+    startAt += 100;
+  }
+  return issues;
+}
+
+async function getBacklog(cfg, boardId) {
+  setLoadingMsg('Loading backlog...');
+  let issues = [], startAt = 0;
+  while (true) {
+    const data = await jiraFetch(cfg,
+      `/rest/agile/1.0/board/${boardId}/backlog?maxResults=100&startAt=${startAt}&fields=assignee,status,${cfg.storyPointsField},summary`);
+    issues = issues.concat(data.issues || []);
+    if (issues.length >= data.total || !(data.issues?.length)) break;
+    startAt += 100;
+  }
+  return issues.filter(issue => issue.fields?.status?.statusCategory?.key === 'new');
+}
+
+async function getProjectMembers(cfg) {
+  setLoadingMsg('Loading team members...');
+  let users = [], startAt = 0;
+  while (true) {
+    const data = await jiraFetch(cfg,
+      `/rest/api/3/user/assignable/search?project=${cfg.projectKey}&maxResults=200&startAt=${startAt}`);
+    if (!data || !data.length) break;
+    users = users.concat(data);
+    if (data.length < 200) break;
+    startAt += 200;
+  }
+  accountIdToName = {};
+  users.forEach(u => {
+    if (u.displayName && u.accountType === 'atlassian') {
+      allContributors.add(u.displayName);
+      if (u.accountId) accountIdToName[u.accountId] = u.displayName;
+    }
+  });
+  return users;
+}
+
+async function getOrgId(cfg) {
+  setLoadingMsg('Loading organization...');
+  // Use configured orgId if available
+  if (cfg.orgId) return cfg.orgId;
+  // Fallback: try tenant_info from Jira instance
+  try {
+    const info = await jiraFetch(cfg, '/_edge/tenant_info');
+    return info.orgId || null;
+  } catch(e) {
+    console.warn('Could not get orgId from tenant_info:', e.message);
+    return null;
+  }
+}
+
+async function loadTeams(cfg) {
+  setLoadingMsg('Loading teams...');
+
+  const orgId = cfg.orgId;
+  if (!orgId) { console.warn('No orgId configured, skipping teams'); return; }
+
+  // Try automatic API-based team + member loading via Jira gateway
+  try {
+    let teamsUrl = `/gateway/api/public/teams/v1/org/${orgId}/teams?size=300`;
+    if (cfg.siteId) teamsUrl += `&siteId=${cfg.siteId}`;
+
+    const teamsData = await jiraFetch(cfg, teamsUrl);
+    const apiTeams = teamsData.entities || [];
+    console.log(`Found ${apiTeams.length} teams from API`);
+
+    let membersLoaded = 0;
+    for (const team of apiTeams) {
+      const teamName = team.displayName || team.name;
+      const teamId = team.teamId;
+      if (!teamName || !teamId) continue;
+
+      try {
+        setLoadingMsg(`Loading members: ${teamName}...`);
+        let membersUrl = `/gateway/api/public/teams/v1/org/${orgId}/teams/${teamId}/members`;
+        if (cfg.siteId) membersUrl += `?siteId=${cfg.siteId}`;
+
+        const membersData = await jiraFetch(cfg, membersUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ first: 50 }),
+        });
+
+        const members = membersData.results || [];
+        // Paginate if needed
+        let pageInfo = membersData.pageInfo;
+        let allMembers = [...members];
+        while (pageInfo && pageInfo.hasNextPage && pageInfo.endCursor) {
+          const nextData = await jiraFetch(cfg, membersUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ first: 50, after: pageInfo.endCursor }),
+          });
+          allMembers = allMembers.concat(nextData.results || []);
+          pageInfo = nextData.pageInfo;
+        }
+
+        allMembers.forEach(m => {
+          const name = accountIdToName[m.accountId];
+          if (name) {
+            if (!teamsByPerson[name]) teamsByPerson[name] = [];
+            if (!teamsByPerson[name].includes(teamName)) teamsByPerson[name].push(teamName);
+          }
+        });
+        membersLoaded++;
+      } catch(e) {
+        console.warn(`Could not load members for ${teamName}: ${e.message}`);
+      }
+    }
+
+    if (membersLoaded > 0) {
+      allTeamNames = [...new Set(Object.values(teamsByPerson).flat())].sort((a, b) => a.localeCompare(b));
+      console.log(`Teams with members: ${allTeamNames.join(', ')} | ${Object.keys(teamsByPerson).length} people assigned`);
+      return;
+    }
+    console.warn('API team listing worked but no members could be loaded — falling back to manual config');
+  } catch(e) {
+    console.warn('Teams API fetch failed, falling back to manual config:', e.message);
+  }
+
+  // Fallback: manual teamMembers config
+  const teamConfig = cfg.teamMembers || {};
+  const configTeamNames = Object.keys(teamConfig).filter(t => teamConfig[t] && teamConfig[t].length > 0);
+  if (configTeamNames.length) {
+    console.log(`Using manual team config: ${configTeamNames.join(', ')}`);
+    configTeamNames.forEach(teamName => {
+      teamConfig[teamName].forEach(memberName => {
+        const match = [...allContributors].find(c =>
+          c === memberName ||
+          c.toLowerCase() === memberName.toLowerCase() ||
+          c.toLowerCase().includes(memberName.toLowerCase()) ||
+          memberName.toLowerCase().includes(c.toLowerCase())
+        );
+        const name = match || memberName;
+        if (!teamsByPerson[name]) teamsByPerson[name] = [];
+        if (!teamsByPerson[name].includes(teamName)) teamsByPerson[name].push(teamName);
+        allContributors.add(name);
+      });
+    });
+    allTeamNames = configTeamNames.sort((a, b) => a.localeCompare(b));
+    console.log(`Teams mapped: ${allTeamNames.join(', ')} | ${Object.keys(teamsByPerson).length} people assigned`);
+  }
+}
+
+// ── Data processing ──────────────────────────────────────────────
+
+function processIssues(issues, storyPointsField) {
+  const byAssignee = {};
+  issues.forEach(issue => {
+    const f = issue.fields;
+    const name = f.assignee?.displayName || 'Unassigned';
+    const pts  = parseFloat(f[storyPointsField]) || 0;
+    const cat  = { done: 'done', indeterminate: 'inprog', new: 'todo' }[f.status?.statusCategory?.key] || 'todo';
+    if (!byAssignee[name]) byAssignee[name] = { name, done:0, inprog:0, todo:0 };
+    byAssignee[name][cat] += pts;
+    allContributors.add(name);
+  });
+  return byAssignee;
+}
+
+function processBacklog(issues, storyPointsField) {
+  const byAssignee = {};
+  issues.forEach(issue => {
+    const f = issue.fields;
+    const name = f.assignee?.displayName || 'Unassigned';
+    const pts  = parseFloat(f[storyPointsField]) || 0;
+    if (!byAssignee[name]) byAssignee[name] = 0;
+    byAssignee[name] += pts;
+    allContributors.add(name);
+  });
+  return byAssignee;
+}
+
+// ── Team-based rendering ─────────────────────────────────────────
+
+function getTeamMembers(teamName) {
+  const members = [];
+  allContributors.forEach(name => {
+    const personTeams = teamsByPerson[name];
+    if (teamName === 'No Team') {
+      if (!personTeams || personTeams.length === 0) members.push(name);
+    } else {
+      if (personTeams && personTeams.includes(teamName)) members.push(name);
+    }
+  });
+  return members.sort((a, b) => a.localeCompare(b));
+}
+
+function getOrderedTeams() {
+  const teams = [...allTeamNames];
+  const hasUnteamed = [...allContributors].some(name => !teamsByPerson[name] || teamsByPerson[name].length === 0);
+  if (hasUnteamed) teams.push('No Team');
+  return teams;
+}
+
+function buildBarRows(members, valueFn, barColor, maxVal) {
+  if (!members.length) return '<div class="bar-empty">No members</div>';
+  return members.map(name => {
+    const val = valueFn(name);
+    const pct = val > 0 ? Math.max((val / maxVal) * 100, 2) : 0;
+    return `<div class="bar-row">
+      <div class="bar-label" title="${name}">${name}</div>
+      <div class="bar-track">
+        <div class="bar-fill" style="width:${pct}%;background:${barColor}"></div>
+      </div>
+      <div class="bar-value">${fmt(val)} pts</div>
+    </div>`;
+  }).join('');
+}
+
+function buildStackedBarRows(members, dataFn, maxVal) {
+  if (!members.length) return '<div class="bar-empty">No members</div>';
+  return members.map(name => {
+    const d = dataFn(name);
+    const done = d ? d.done : 0;
+    const inprog = d ? d.inprog : 0;
+    const todo = d ? d.todo : 0;
+    const total = done + inprog + todo;
+    const totalPct = total > 0 ? Math.max((total / maxVal) * 100, 2) : 0;
+
+    let segments = '';
+    if (total > 0) {
+      const donePct = (done / total) * 100;
+      const inprogPct = (inprog / total) * 100;
+      const todoPct = (todo / total) * 100;
+      if (done > 0)   segments += `<div class="bar-segment" style="width:${donePct}%;background:${BAR_COLORS.done}" title="Done: ${fmt(done)} pts"></div>`;
+      if (inprog > 0) segments += `<div class="bar-segment" style="width:${inprogPct}%;background:${BAR_COLORS.inprog}" title="In Progress: ${fmt(inprog)} pts"></div>`;
+      if (todo > 0)   segments += `<div class="bar-segment" style="width:${todoPct}%;background:${BAR_COLORS.todo}" title="To Do: ${fmt(todo)} pts"></div>`;
+    }
+
+    return `<div class="bar-row">
+      <div class="bar-label" title="${name}">${name}</div>
+      <div class="bar-track">
+        <div class="bar-fill-stacked" style="width:${totalPct}%">${segments}</div>
+      </div>
+      <div class="bar-value">${fmt(total)} pts</div>
+    </div>`;
+  }).join('');
+}
+
+function buildAttentionRows(members, sprintByPerson) {
+  const items = [];
+  members.forEach(name => {
+    const backlogPts = backlogByPerson[name] || 0;
+    const d = sprintByPerson[name];
+    const sprintTotal = d ? d.done + d.inprog + d.todo : 0;
+
+    if (backlogPts === 0 && sprintTotal === 0) {
+      items.push({ name, reasons: ['No backlog', 'Nothing in sprint'], detail: 'no work assigned' });
+    } else if (backlogPts === 0) {
+      items.push({ name, reasons: ['No backlog'], detail: `${fmt(sprintTotal)} pts in sprint` });
+    } else if (sprintTotal === 0) {
+      items.push({ name, reasons: ['Nothing in sprint'], detail: `${fmt(backlogPts)} pts in backlog` });
+    }
+  });
+
+  if (items.length === 0) return '<div class="attention-ok">Everyone looks good</div>';
+  return items.map(item => `
+    <div class="risk-item">
+      <div>
+        <div class="risk-name">${item.name}</div>
+        <div class="risk-detail">${item.detail}</div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">${item.reasons.map(r => `<span class="risk-reason">${r}</span>`).join('')}</div>
+    </div>`).join('');
+}
+
+function buildTeamTabs() {
+  const teams = getOrderedTeams();
+  const tabsContainer = document.getElementById('team-tabs');
+  if (teams.length <= 1) { tabsContainer.style.display = 'none'; return; }
+
+  tabsContainer.style.display = 'flex';
+  tabsContainer.innerHTML = '';
+  teams.forEach(teamName => {
+    const btn = document.createElement('button');
+    btn.className = 'team-tab';
+    btn.textContent = teamName;
+    btn.onclick = () => switchTeamTab(teamName);
+    tabsContainer.appendChild(btn);
+  });
+
+  const defaultTeam = activeTeamTab && teams.includes(activeTeamTab)
+    ? activeTeamTab
+    : (teams.includes('Technology All') ? 'Technology All' : teams[0]);
+  switchTeamTab(defaultTeam);
+}
+
+function switchTeamTab(teamName) {
+  activeTeamTab = teamName;
+  document.querySelectorAll('.team-tab').forEach(btn => {
+    btn.classList.toggle('active', btn.textContent === teamName);
+  });
+  document.querySelectorAll('.team-section').forEach(section => {
+    section.style.display = section.dataset.team === teamName ? '' : 'none';
+  });
+}
+
+function renderDashboard(sprintByPerson, sprintLabel) {
+  document.getElementById('sprint-label').textContent = sprintLabel;
+
+  const teams = getOrderedTeams();
+  const container = document.getElementById('teams-container');
+
+  // Compute global maxes for consistent bar scaling across all teams
+  let globalActiveMax = 1, globalBacklogMax = 1;
+  allContributors.forEach(name => {
+    const d = sprintByPerson[name];
+    const activeVal = d ? d.done + d.inprog + d.todo : 0;
+    if (activeVal > globalActiveMax) globalActiveMax = activeVal;
+    const backlogVal = backlogByPerson[name] || 0;
+    if (backlogVal > globalBacklogMax) globalBacklogMax = backlogVal;
+  });
+
+  container.innerHTML = teams.map(teamName => {
+    const members = getTeamMembers(teamName);
+
+    const activeRows = buildStackedBarRows(members, name => {
+      return sprintByPerson[name] || null;
+    }, globalActiveMax);
+
+    const backlogRows = buildBarRows(members, name => {
+      return backlogByPerson[name] || 0;
+    }, '#94A3B8', globalBacklogMax);
+
+    const attentionRows = buildAttentionRows(members, sprintByPerson);
+
+    return `<div class="team-section" data-team="${teamName}">
+      <div class="team-section-header">
+        <h2>${teamName}</h2>
+        <span class="team-member-count">${members.length} member${members.length !== 1 ? 's' : ''}</span>
+      </div>
+      <div class="team-inner-grid">
+        <div class="team-sub-section">
+          <div class="team-sub-header">Active Work <span class="bar-legend"><span class="legend-dot" style="background:${BAR_COLORS.done}"></span>Done <span class="legend-dot" style="background:${BAR_COLORS.inprog}"></span>In Progress <span class="legend-dot" style="background:${BAR_COLORS.todo}"></span>To Do</span></div>
+          <div class="team-sub-content">${activeRows}</div>
+        </div>
+        <div class="team-sub-section">
+          <div class="team-sub-header">Backlog</div>
+          <div class="team-sub-content">${backlogRows}</div>
+        </div>
+      </div>
+      <div class="team-attention">
+        <div class="team-attention-header">Needs Attention</div>
+        ${attentionRows}
+      </div>
+    </div>`;
+  }).join('');
+
+  buildTeamTabs();
+  document.getElementById('last-refreshed').textContent = `Last refreshed: ${new Date().toLocaleString()}`;
+}
+
+// ── Sprint switcher ──────────────────────────────────────────────
+
+async function selectSprint(sprint, btnEl) {
+  document.querySelectorAll('.sprint-btn').forEach(b => b.classList.remove('active'));
+  btnEl.classList.add('active');
+  if (!issuesCache[sprint.id]) {
+    showLoading(true);
+    try { issuesCache[sprint.id] = await getIssues(activeCfg, activeBoardId, sprint.id); }
+    catch(e) { showError(e.message); return; }
+    finally { showLoading(false); document.getElementById('dashboard').style.display = 'block'; }
+  }
+  const sprintByPerson = processIssues(issuesCache[sprint.id], activeCfg.storyPointsField);
+  const dates = sprint.startDate ? ` · ${sprint.startDate.slice(0,10)} – ${sprint.endDate.slice(0,10)}` : '';
+  renderDashboard(sprintByPerson, sprint.name + dates);
+}
+
+function buildSprintSelector(sprints) {
+  const sel = document.getElementById('sprint-selector');
+  sel.innerHTML = '';
+  sprints.forEach((sp, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'sprint-btn' + (i === 0 ? ' active' : '');
+    btn.textContent = sp.name;
+    btn.title = sp.name;
+    btn.onclick = () => selectSprint(sp, btn);
+    sel.appendChild(btn);
+  });
+}
+
+// ── UI helpers ───────────────────────────────────────────────────
+
+function setLoadingMsg(msg) { document.getElementById('loading-msg').textContent = msg; }
+
+function showLoading(on) {
+  document.getElementById('loading-overlay').style.display = on ? 'flex' : 'none';
+  if (on) document.getElementById('dashboard').style.display = 'none';
+}
+
+function showError(msg) {
+  const el = document.getElementById('config-error');
+  el.textContent = msg;
+  el.style.display = 'block';
+  document.getElementById('config-banner').style.display = 'block';
+  document.getElementById('loading-overlay').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'none';
+}
+
+// ── Load from Jira ───────────────────────────────────────────────
+
+document.getElementById('btn-load').addEventListener('click', async () => {
+  const hasServerAuth = serverConfig && serverConfig.hasAuth;
+  const cfg = {
+    baseUrl:          document.getElementById('cfg-url').value.trim(),
+    email:            hasServerAuth ? '' : document.getElementById('cfg-email').value.trim(),
+    apiToken:         hasServerAuth ? '' : document.getElementById('cfg-token').value.trim(),
+    projectKey:       document.getElementById('cfg-project').value.trim().toUpperCase(),
+    corsProxy:        DEFAULTS.corsProxy || '/proxy/',
+    storyPointsField: (serverConfig && serverConfig.storyPointsField) || DEFAULTS.storyPointsField || 'customfield_10038',
+    orgId:            (serverConfig && serverConfig.orgId) || DEFAULTS.orgId || '',
+    siteId:           (serverConfig && serverConfig.siteId) || DEFAULTS.siteId || '',
+  };
+
+  document.getElementById('config-error').style.display = 'none';
+  if (!cfg.baseUrl || !cfg.projectKey) { showError('Please fill in all required fields.'); return; }
+  if (!hasServerAuth && (!cfg.email || !cfg.apiToken)) { showError('Please fill in email and API token.'); return; }
+  if (!cfg.baseUrl.startsWith('http')) { showError('Base URL must start with https://'); return; }
+
+  const btn = document.getElementById('btn-load');
+  btn.disabled = true;
+  document.getElementById('config-banner').style.display = 'none';
+  showLoading(true);
+
+  try {
+    activeCfg = cfg; issuesCache = {}; backlogByPerson = {};
+    allContributors = new Set(); teamsByPerson = {}; allTeamNames = [];
+    accountIdToName = {}; activeTeamTab = null;
+
+    const { boardId, sprints } = await getSprints(cfg);
+    activeBoardId = boardId;
+
+    // Load project members
+    await getProjectMembers(cfg);
+
+    // Load team assignments
+    await loadTeams(cfg);
+
+    // Load backlog
+    const backlogIssues = await getBacklog(cfg, boardId);
+    backlogByPerson = processBacklog(backlogIssues, cfg.storyPointsField);
+
+    // Load first sprint
+    const firstSprint = sprints[0];
+    issuesCache[firstSprint.id] = await getIssues(cfg, boardId, firstSprint.id);
+    const sprintByPerson = processIssues(issuesCache[firstSprint.id], cfg.storyPointsField);
+
+    const dates = firstSprint.startDate ? ` · ${firstSprint.startDate.slice(0,10)} – ${firstSprint.endDate.slice(0,10)}` : '';
+    renderDashboard(sprintByPerson, firstSprint.name + dates);
+    buildSprintSelector(sprints);
+    showLoading(false);
+    document.getElementById('dashboard').style.display = 'block';
+  } catch(e) {
+    showError(e.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById('btn-reconfigure').addEventListener('click', () => {
+  document.getElementById('config-banner').style.display = 'block';
+  document.getElementById('dashboard').style.display = 'none';
+});
+
+// ── Demo data ────────────────────────────────────────────────────
+
+document.getElementById('btn-demo').addEventListener('click', () => {
+  document.getElementById('config-error').style.display = 'none';
+  document.getElementById('config-banner').style.display = 'none';
+  activeCfg = {};
+  allContributors = new Set(); teamsByPerson = {}; allTeamNames = [];
+  accountIdToName = {}; activeTeamTab = null;
+
+  backlogByPerson = {
+    'Kyle Jensen':     5,  'Josiah Hepworth': 12, 'Maria Torres': 8,
+    'Devon Park':      0,  'Lena Vo':         15, 'Arjun Mehta':  3,
+    'Nia Williams':    10,
+  };
+
+  // Demo team assignments (some on multiple teams)
+  teamsByPerson = {
+    'Kyle Jensen':     ['Engineering'],
+    'Josiah Hepworth': ['Engineering'],
+    'Maria Torres':    ['Engineering', 'Mobile'],
+    'Devon Park':      ['QA'],
+    'Lena Vo':         ['Engineering'],
+    'Arjun Mehta':     ['Platform'],
+    'Nia Williams':    ['Platform', 'QA'],
+  };
+  allTeamNames = ['Engineering', 'Mobile', 'Platform', 'QA'];
+
+  Object.keys(backlogByPerson).forEach(n => allContributors.add(n));
+
+  const demos = [
+    { id:'d22', name:'Sprint 22', startDate:'2025-02-03', endDate:'2025-02-14',
+      employees:[
+        {name:'Kyle Jensen',    done:12,inprog:2,todo:0},
+        {name:'Josiah Hepworth',done:9, inprog:3,todo:1},
+        {name:'Maria Torres',   done:7, inprog:2,todo:3},
+        {name:'Devon Park',     done:10,inprog:1,todo:0},
+        {name:'Lena Vo',        done:6, inprog:4,todo:2},
+      ]},
+    { id:'d23', name:'Sprint 23', startDate:'2025-02-17', endDate:'2025-02-28',
+      employees:[
+        {name:'Kyle Jensen',    done:11,inprog:1,todo:0},
+        {name:'Josiah Hepworth',done:10,inprog:2,todo:0},
+        {name:'Maria Torres',   done:8, inprog:3,todo:1},
+        {name:'Devon Park',     done:10,inprog:0,todo:0},
+        {name:'Lena Vo',        done:5, inprog:2,todo:4},
+        {name:'Arjun Mehta',    done:9, inprog:2,todo:1},
+      ]},
+    { id:'d24', name:'Sprint 24', startDate:'2025-03-03', endDate:'2025-03-14',
+      employees:[
+        {name:'Kyle Jensen',    done:10,inprog:2,todo:1},
+        {name:'Josiah Hepworth',done:8, inprog:4,todo:0},
+        {name:'Maria Torres',   done:5, inprog:2,todo:5},
+        {name:'Devon Park',     done:10,inprog:0,todo:2},
+        {name:'Lena Vo',        done:3, inprog:3,todo:6},
+        {name:'Arjun Mehta',    done:12,inprog:1,todo:0},
+        {name:'Nia Williams',   done:7, inprog:2,todo:3},
+      ]},
+  ];
+
+  demos.forEach(sp => sp.employees.forEach(e => allContributors.add(e.name)));
+
+  function toMap(employees) {
+    const m = {};
+    employees.forEach(e => { m[e.name] = e; });
+    return m;
+  }
+
+  function renderDemoSprint(sp) {
+    renderDashboard(toMap(sp.employees), `${sp.name} · ${sp.startDate} – ${sp.endDate}`);
+  }
+
+  const sel = document.getElementById('sprint-selector');
+  sel.innerHTML = '';
+  demos.forEach((sp, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'sprint-btn' + (i === demos.length - 1 ? ' active' : '');
+    btn.textContent = sp.name;
+    btn.onclick = () => {
+      document.querySelectorAll('.sprint-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      renderDemoSprint(sp);
+    };
+    sel.appendChild(btn);
+  });
+
+  renderDemoSprint(demos[demos.length - 1]);
+  document.getElementById('dashboard').style.display = 'block';
+});
+
+// ── Initialization ───────────────────────────────────────────────
+if (location.protocol === 'file:') {
+  document.getElementById('config-banner').style.display = 'block';
+  const errEl = document.getElementById('config-error');
+  errEl.style.display = 'block';
+  errEl.style.whiteSpace = 'pre-line';
+  errEl.innerHTML = 'This file needs its built-in proxy server to reach Jira.\n\n'
+    + 'Open a terminal and run:\n'
+    + '<code style="background:#F1F5F9;padding:2px 8px;border-radius:4px;font-size:13px">node main.html</code>\n\n'
+    + 'Then open <a href="http://localhost:8090">http://localhost:8090</a> in your browser.';
+  document.getElementById('btn-load').disabled = true;
+} else {
+  fetch('/config').then(function(r){ return r.json(); }).then(function(cfg){
+    serverConfig = cfg;
+    if (cfg.hasAuth) {
+      document.querySelectorAll('#cfg-email, #cfg-token').forEach(function(el){
+        el.closest('.config-field').style.display = 'none';
+      });
+      document.getElementById('config-note').style.display = 'none';
+      var sa = document.getElementById('config-server-auth');
+      if (sa) sa.style.display = 'block';
+      if (cfg.baseUrl) document.getElementById('cfg-url').value = cfg.baseUrl;
+      if (cfg.projectKey) document.getElementById('cfg-project').value = cfg.projectKey;
+      document.getElementById('btn-load').click();
+    } else if (DEFAULTS.baseUrl && DEFAULTS.email && DEFAULTS.apiToken && DEFAULTS.projectKey) {
+      ['url','email','token','project'].forEach(function(k){
+        var el = document.getElementById('cfg-' + k);
+        var val = DEFAULTS[{url:'baseUrl',email:'email',token:'apiToken',project:'projectKey'}[k]];
+        if (el && val) el.value = val;
+      });
+      document.getElementById('btn-load').click();
+    }
+  }).catch(function(e){
+    console.warn('Could not fetch /config:', e.message);
+  });
+}
+</script>
+</body>
+</html>
