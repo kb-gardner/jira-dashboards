@@ -685,14 +685,12 @@ async function loadTeams(cfg) {
           pageInfo = nextData.pageInfo;
         }
 
-        console.log(`Team "${teamName}" raw members:`, JSON.stringify(allMembers.map(m => ({ accountId: m.accountId, keys: Object.keys(m) }))));
         allMembers.forEach(m => {
           let name = accountIdToName[m.accountId];
           if (!name && (m.displayName || m.name)) {
             name = m.displayName || m.name;
             if (m.accountId) accountIdToName[m.accountId] = name;
           }
-          if (!name) console.warn(`Team "${teamName}": could not resolve name for member`, JSON.stringify(m));
           if (name) {
             allContributors.add(name);
             if (!teamsByPerson[name]) teamsByPerson[name] = [];
