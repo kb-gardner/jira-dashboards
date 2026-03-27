@@ -686,7 +686,11 @@ async function loadTeams(cfg) {
         }
 
         allMembers.forEach(m => {
-          const name = accountIdToName[m.accountId];
+          let name = accountIdToName[m.accountId];
+          if (!name && (m.displayName || m.name)) {
+            name = m.displayName || m.name;
+            if (m.accountId) accountIdToName[m.accountId] = name;
+          }
           if (name) {
             allContributors.add(name);
             if (!teamsByPerson[name]) teamsByPerson[name] = [];
