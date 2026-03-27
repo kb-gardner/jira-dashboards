@@ -688,6 +688,7 @@ async function loadTeams(cfg) {
         allMembers.forEach(m => {
           const name = accountIdToName[m.accountId];
           if (name) {
+            allContributors.add(name);
             if (!teamsByPerson[name]) teamsByPerson[name] = [];
             if (!teamsByPerson[name].includes(teamName)) teamsByPerson[name].push(teamName);
           }
