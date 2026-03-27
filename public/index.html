@@ -564,11 +564,11 @@ function jiraFetch(cfg, apiPath, opts = {}) {
 
 async function getSprints(cfg) {
   setLoadingMsg('Finding boards...');
-  const boards = await jiraFetch(cfg, `/rest/agile/1.0/board?projectKeyOrId=${cfg.projectKey}&maxResults=60`);
+  const boards = await jiraFetch(cfg, `/rest/agile/1.0/board?projectKeyOrId=${cfg.projectKey}&maxResults=50`);
   if (!boards.values?.length) throw new Error(`No boards found for project "${cfg.projectKey}"`);
   const boardId = boards.values[0].id;
   setLoadingMsg('Loading sprints...');
-  const data = await jiraFetch(cfg, `/rest/agile/1.0/board/${boardId}/sprint?state=active,closed,future&maxResults=60`);
+  const data = await jiraFetch(cfg, `/rest/agile/1.0/board/${boardId}/sprint?state=active,closed,future&maxResults=50`);
   const order = { closed: 0, active: 1, future: 2 };
   const all = (data.values || []).sort((a, b) => (order[a.state] ?? 0) - (order[b.state] ?? 0) || new Date(a.startDate || 0) - new Date(b.startDate || 0));
   const closedSprints = all.filter(s => s.state === 'closed').slice(-3);
@@ -668,7 +668,7 @@ async function loadTeams(cfg) {
         const membersData = await jiraFetch(cfg, membersUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ first: 60 }),
+          body: JSON.stringify({ first: 50 }),
         });
 
         const members = membersData.results || [];
@@ -679,7 +679,7 @@ async function loadTeams(cfg) {
           const nextData = await jiraFetch(cfg, membersUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ first: 60, after: pageInfo.endCursor }),
+            body: JSON.stringify({ first: 50, after: pageInfo.endCursor }),
           });
           allMembers = allMembers.concat(nextData.results || []);
           pageInfo = nextData.pageInfo;
