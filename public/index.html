@@ -622,6 +622,7 @@ async function getProjectMembers(cfg) {
       if (u.accountId) accountIdToName[u.accountId] = u.displayName;
     }
   });
+  console.log(`Project members: ${users.length} users fetched, ${Object.keys(accountIdToName).length} resolved to accountIdToName`);
   return users;
 }
 
@@ -685,14 +686,17 @@ async function loadTeams(cfg) {
           pageInfo = nextData.pageInfo;
         }
 
+        let resolved = 0;
         allMembers.forEach(m => {
           const name = accountIdToName[m.accountId];
           if (name) {
+            resolved++;
             allContributors.add(name);
             if (!teamsByPerson[name]) teamsByPerson[name] = [];
             if (!teamsByPerson[name].includes(teamName)) teamsByPerson[name].push(teamName);
           }
         });
+        console.log(`Team "${teamName}": ${allMembers.length} members, ${resolved} resolved`);
         membersLoaded++;
       } catch(e) {
         console.warn(`Could not load members for ${teamName}: ${e.message}`);
