@@ -685,15 +685,6 @@ async function loadTeams(cfg) {
           pageInfo = nextData.pageInfo;
         }
 
-        // Resolve any accountIds not already in accountIdToName
-        const unresolved = allMembers.filter(m => m.accountId && !accountIdToName[m.accountId]);
-        for (const m of unresolved) {
-          try {
-            const u = await jiraFetch(cfg, `/rest/api/3/user?accountId=${m.accountId}`);
-            if (u.displayName) accountIdToName[m.accountId] = u.displayName;
-          } catch(e) { /* skip if user lookup fails */ }
-        }
-
         allMembers.forEach(m => {
           const name = accountIdToName[m.accountId];
           if (name) {
