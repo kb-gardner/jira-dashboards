@@ -669,7 +669,7 @@ async function loadTeams(cfg) {
         const membersData = await jiraFetch(cfg, membersUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ first: 60 }),
+          body: JSON.stringify({ first: 50 }),
         });
 
         const members = membersData.results || [];
@@ -680,7 +680,7 @@ async function loadTeams(cfg) {
           const nextData = await jiraFetch(cfg, membersUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ first: 60, after: pageInfo.endCursor }),
+            body: JSON.stringify({ first: 50, after: pageInfo.endCursor }),
           });
           allMembers = allMembers.concat(nextData.results || []);
           pageInfo = nextData.pageInfo;
