@@ -106,6 +106,8 @@
   }
 
   .sprint-btn.active, .sprint-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 500; }
+  .sprint-btn.future { border-style: dashed; }
+  .sprint-btn.future.active, .sprint-btn.future:hover { border-style: solid; }
 
 
   #team-tabs {
@@ -433,8 +435,12 @@ async function getSprints(cfg) {
   if (!boards.values?.length) throw new Error(`No boards found for project "${cfg.projectKey}"`);
   const boardId = boards.values[0].id;
   setLoadingMsg('Loading sprints...');
-  const data = await jiraFetch(cfg, `/rest/agile/1.0/board/${boardId}/sprint?state=active,closed&maxResults=20`);
-  const sprints = (data.values || []).reverse().slice(0, 5);
+  const data = await jiraFetch(cfg, `/rest/agile/1.0/board/${boardId}/sprint?state=active,closed,future&maxResults=50`);
+  const order = { closed: 0, active: 1, future: 2 };
+  const all = (data.values || []).sort((a, b) => (order[a.state] ?? 0) - (order[b.state] ?? 0) || new Date(a.startDate || 0) - new Date(b.startDate || 0));
+  const closedSprints = all.filter(s => s.state === 'closed').slice(-3);
+  const otherSprints = all.filter(s => s.state !== 'closed');
+  const sprints = [...closedSprints, ...otherSprints];
   if (!sprints.length) throw new Error('No sprints found on this board');
   return { boardId, sprints };
 }
@@ -821,9 +827,11 @@ async function selectSprint(sprint, btnEl) {
 function buildSprintSelector(sprints) {
   const sel = document.getElementById('sprint-selector');
   sel.innerHTML = '';
+  const activeIdx = sprints.findIndex(s => s.state === 'active');
+  const defaultIdx = activeIdx >= 0 ? activeIdx : 0;
   sprints.forEach((sp, i) => {
     const btn = document.createElement('button');
-    btn.className = 'sprint-btn' + (i === 0 ? ' active' : '');
+    btn.className = 'sprint-btn' + (sp.state === 'future' ? ' future' : '') + (i === defaultIdx ? ' active' : '');
     btn.textContent = sp.name;
     btn.title = sp.name;
     btn.onclick = () => selectSprint(sp, btn);
@@ -892,8 +900,8 @@ document.getElementById('btn-load').addEventListener('click', async () => {
     const backlogIssues = await getBacklog(cfg, boardId);
     backlogByPerson = processBacklog(backlogIssues, cfg.storyPointsField);
 
-    // Load first sprint
-    const firstSprint = sprints[0];
+    // Load active sprint (or first if none active)
+    const firstSprint = sprints.find(s => s.state === 'active') || sprints[0];
     issuesCache[firstSprint.id] = await getIssues(cfg, boardId, firstSprint.id);
     const sprintByPerson = processIssues(issuesCache[firstSprint.id], cfg.storyPointsField);
 
@@ -944,7 +952,7 @@ document.getElementById('btn-demo').addEventListener('click', () => {
   Object.keys(backlogByPerson).forEach(n => allContributors.add(n));
 
   const demos = [
-    { id:'d22', name:'Sprint 22', startDate:'2025-02-03', endDate:'2025-02-14',
+    { id:'d22', name:'Sprint 22', state:'closed', startDate:'2025-02-03', endDate:'2025-02-14',
       employees:[
         {name:'Kyle Jensen',    done:12,inprog:2,todo:0},
         {name:'Josiah Hepworth',done:9, inprog:3,todo:1},
@@ -952,7 +960,7 @@ document.getElementById('btn-demo').addEventListener('click', () => {
         {name:'Devon Park',     done:10,inprog:1,todo:0},
         {name:'Lena Vo',        done:6, inprog:4,todo:2},
       ]},
-    { id:'d23', name:'Sprint 23', startDate:'2025-02-17', endDate:'2025-02-28',
+    { id:'d23', name:'Sprint 23', state:'closed', startDate:'2025-02-17', endDate:'2025-02-28',
       employees:[
         {name:'Kyle Jensen',    done:11,inprog:1,todo:0},
         {name:'Josiah Hepworth',done:10,inprog:2,todo:0},
@@ -961,7 +969,7 @@ document.getElementById('btn-demo').addEventListener('click', () => {
         {name:'Lena Vo',        done:5, inprog:2,todo:4},
         {name:'Arjun Mehta',    done:9, inprog:2,todo:1},
       ]},
-    { id:'d24', name:'Sprint 24', startDate:'2025-03-03', endDate:'2025-03-14',
+    { id:'d24', name:'Sprint 24', state:'active', startDate:'2025-03-03', endDate:'2025-03-14',
       employees:[
         {name:'Kyle Jensen',    done:10,inprog:2,todo:1},
         {name:'Josiah Hepworth',done:8, inprog:4,todo:0},
@@ -970,6 +978,14 @@ document.getElementById('btn-demo').addEventListener('click', () => {
         {name:'Lena Vo',        done:3, inprog:3,todo:6},
         {name:'Arjun Mehta',    done:12,inprog:1,todo:0},
         {name:'Nia Williams',   done:7, inprog:2,todo:3},
+      ]},
+    { id:'d25', name:'Sprint 25', state:'future', startDate:'2025-03-17', endDate:'2025-03-28',
+      employees:[
+        {name:'Kyle Jensen',    done:0,inprog:0,todo:8},
+        {name:'Josiah Hepworth',done:0,inprog:0,todo:6},
+        {name:'Maria Torres',   done:0,inprog:0,todo:10},
+        {name:'Devon Park',     done:0,inprog:0,todo:5},
+        {name:'Arjun Mehta',    done:0,inprog:0,todo:7},
       ]},
   ];
 
@@ -987,9 +1003,11 @@ document.getElementById('btn-demo').addEventListener('click', () => {
 
   const sel = document.getElementById('sprint-selector');
   sel.innerHTML = '';
+  const activeDemo = demos.findIndex(s => s.state === 'active');
+  const defaultDemo = activeDemo >= 0 ? activeDemo : demos.length - 1;
   demos.forEach((sp, i) => {
     const btn = document.createElement('button');
-    btn.className = 'sprint-btn' + (i === demos.length - 1 ? ' active' : '');
+    btn.className = 'sprint-btn' + (sp.state === 'future' ? ' future' : '') + (i === defaultDemo ? ' active' : '');
     btn.textContent = sp.name;
     btn.onclick = () => {
       document.querySelectorAll('.sprint-btn').forEach(b => b.classList.remove('active'));
@@ -999,7 +1017,7 @@ document.getElementById('btn-demo').addEventListener('click', () => {
     sel.appendChild(btn);
   });
 
-  renderDemoSprint(demos[demos.length - 1]);
+  renderDemoSprint(demos[defaultDemo]);
   document.getElementById('dashboard').style.display = 'block';
 });
 
