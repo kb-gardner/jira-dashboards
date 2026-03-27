@@ -685,14 +685,17 @@ async function loadTeams(cfg) {
           pageInfo = nextData.pageInfo;
         }
 
-        console.log(`Team "${teamName}" raw members:`, JSON.stringify(allMembers.map(m => ({ accountId: m.accountId, keys: Object.keys(m) }))));
+        // Resolve any accountIds not already in accountIdToName
+        const unresolved = allMembers.filter(m => m.accountId && !accountIdToName[m.accountId]);
+        for (const m of unresolved) {
+          try {
+            const u = await jiraFetch(cfg, `/rest/api/3/user?accountId=${m.accountId}`);
+            if (u.displayName) accountIdToName[m.accountId] = u.displayName;
+          } catch(e) { /* skip if user lookup fails */ }
+        }
+
         allMembers.forEach(m => {
-          let name = accountIdToName[m.accountId];
-          if (!name && (m.displayName || m.name)) {
-            name = m.displayName || m.name;
-            if (m.accountId) accountIdToName[m.accountId] = name;
-          }
-          if (!name) console.warn(`Team "${teamName}": could not resolve name for member`, JSON.stringify(m));
+          const name = accountIdToName[m.accountId];
           if (name) {
             allContributors.add(name);
             if (!teamsByPerson[name]) teamsByPerson[name] = [];
