@@ -409,6 +409,7 @@ let teamsByPerson = {};         // { personName: ['Team A', 'Team B'] }
 let allTeamNames = [];          // sorted team names
 let accountIdToName = {};       // { accountId: displayName } for team member resolution
 let activeTeamTab = null;       // currently selected team tab
+let excludedPeople = new Set(); // members of "non dashboard" team
 let serverConfig = null;        // populated from /config endpoint
 
 // ── Jira API ─────────────────────────────────────────────────────
@@ -568,6 +569,7 @@ async function loadTeams(cfg) {
     if (membersLoaded > 0) {
       allTeamNames = [...new Set(Object.values(teamsByPerson).flat())].sort((a, b) => a.localeCompare(b));
       console.log(`Teams with members: ${allTeamNames.join(', ')} | ${Object.keys(teamsByPerson).length} people assigned`);
+      applyTeamExclusions();
       return;
     }
     console.warn('API team listing worked but no members could be loaded — falling back to manual config');
@@ -597,6 +599,23 @@ async function loadTeams(cfg) {
     allTeamNames = configTeamNames.sort((a, b) => a.localeCompare(b));
     console.log(`Teams mapped: ${allTeamNames.join(', ')} | ${Object.keys(teamsByPerson).length} people assigned`);
   }
+  applyTeamExclusions();
+}
+
+function applyTeamExclusions() {
+  const excludeTeam = allTeamNames.find(t => t.toLowerCase() === 'non dashboard');
+  if (!excludeTeam) return;
+  excludedPeople = new Set();
+  allContributors.forEach(name => {
+    const teams = teamsByPerson[name];
+    if (teams && teams.includes(excludeTeam)) excludedPeople.add(name);
+  });
+  excludedPeople.forEach(name => {
+    allContributors.delete(name);
+    delete teamsByPerson[name];
+  });
+  allTeamNames = allTeamNames.filter(t => t !== excludeTeam);
+  console.log(`Excluded ${excludedPeople.size} members from "${excludeTeam}" team`);
 }
 
 // ── Data processing ──────────────────────────────────────────────
@@ -606,6 +625,7 @@ function processIssues(issues, storyPointsField) {
   issues.forEach(issue => {
     const f = issue.fields;
     const name = f.assignee?.displayName || 'Unassigned';
+    if (excludedPeople.has(name)) return;
     const pts  = parseFloat(f[storyPointsField]) || 0;
     const cat  = { done: 'done', indeterminate: 'inprog', new: 'todo' }[f.status?.statusCategory?.key] || 'todo';
     if (!byAssignee[name]) byAssignee[name] = { name, done:0, inprog:0, todo:0 };
@@ -620,6 +640,7 @@ function processBacklog(issues, storyPointsField) {
   issues.forEach(issue => {
     const f = issue.fields;
     const name = f.assignee?.displayName || 'Unassigned';
+    if (excludedPeople.has(name)) return;
     const pts  = parseFloat(f[storyPointsField]) || 0;
     if (!byAssignee[name]) byAssignee[name] = 0;
     byAssignee[name] += pts;
@@ -885,7 +906,7 @@ document.getElementById('btn-load').addEventListener('click', async () => {
   try {
     activeCfg = cfg; issuesCache = {}; backlogByPerson = {};
     allContributors = new Set(); teamsByPerson = {}; allTeamNames = [];
-    accountIdToName = {}; activeTeamTab = null;
+    accountIdToName = {}; activeTeamTab = null; excludedPeople = new Set();
 
     const { boardId, sprints } = await getSprints(cfg);
     activeBoardId = boardId;
@@ -929,7 +950,7 @@ document.getElementById('btn-demo').addEventListener('click', () => {
   document.getElementById('config-banner').style.display = 'none';
   activeCfg = {};
   allContributors = new Set(); teamsByPerson = {}; allTeamNames = [];
-  accountIdToName = {}; activeTeamTab = null;
+  accountIdToName = {}; activeTeamTab = null; excludedPeople = new Set();
 
   backlogByPerson = {
     'Kyle Jensen':     5,  'Josiah Hepworth': 12, 'Maria Torres': 8,
