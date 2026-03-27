@@ -230,7 +230,8 @@
   }
 
 
-  .bar-row { display: flex; align-items: center; gap: 12px; padding: 5px 20px; }
+  .bar-row { display: flex; align-items: center; gap: 12px; padding: 5px 20px; cursor: pointer; border-radius: 6px; }
+  .bar-row:hover { background: var(--surface2); }
 
   .bar-label {
     width: 130px;
@@ -313,6 +314,124 @@
 
   .last-refreshed { font-size: 11px; font-family: 'IBM Plex Mono', monospace; color: var(--muted); padding: 10px 24px; border-top: 1px solid var(--border); text-align: right; }
 
+  /* ── Person detail modal ── */
+  .modal-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(15,23,42,0.45);
+    backdrop-filter: blur(4px);
+    z-index: 1000;
+    justify-content: center;
+    align-items: start;
+    padding: 60px 24px;
+    overflow-y: auto;
+  }
+  .modal-overlay.open { display: flex; }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    width: 100%;
+    max-width: 720px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.18);
+    animation: fadeUp 0.25s ease both;
+  }
+
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border);
+  }
+  .modal-header h2 { font-size: 16px; font-weight: 700; }
+  .modal-close {
+    background: none; border: none; cursor: pointer;
+    font-size: 20px; color: var(--muted); line-height: 1;
+    padding: 4px 8px; border-radius: 6px;
+  }
+  .modal-close:hover { background: var(--surface2); color: var(--text); }
+
+  .modal-body { padding: 20px 24px 28px; }
+
+  .modal-section { margin-bottom: 24px; }
+  .modal-section:last-child { margin-bottom: 0; }
+
+  .modal-section-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--muted);
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .modal-section-dot {
+    display: inline-block;
+    width: 10px; height: 10px;
+    border-radius: 3px;
+  }
+  .modal-section-pts {
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 500;
+    font-size: 11px;
+    color: var(--accent2);
+  }
+
+  .modal-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .modal-table th {
+    text-align: left;
+    font-size: 11px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 500;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .modal-table td {
+    padding: 7px 10px;
+    border-bottom: 1px solid var(--surface2);
+    vertical-align: top;
+  }
+  .modal-table tr:last-child td { border-bottom: none; }
+  .modal-table .col-key {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    white-space: nowrap;
+    color: var(--accent);
+    width: 100px;
+  }
+  .modal-table .col-key a { color: inherit; text-decoration: none; }
+  .modal-table .col-key a:hover { text-decoration: underline; }
+  .modal-table .col-pts {
+    font-family: 'IBM Plex Mono', monospace;
+    text-align: right;
+    width: 60px;
+    white-space: nowrap;
+  }
+  .modal-table .col-status {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    white-space: nowrap;
+    width: 110px;
+    color: var(--muted);
+  }
+  .modal-empty {
+    font-size: 12px;
+    font-family: 'IBM Plex Mono', monospace;
+    color: var(--muted);
+    padding: 8px 0;
+  }
+
   @keyframes fadeUp { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
 
   @media (max-width: 900px) { .team-inner-grid { grid-template-columns: 1fr; } .team-sub-section:first-child { border-right: none; border-bottom: 1px solid var(--border); } }
@@ -382,6 +501,17 @@
   <div class="last-refreshed" id="last-refreshed"></div>
 </div>
 
+<!-- PERSON DETAIL MODAL -->
+<div class="modal-overlay" id="person-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="modal-person-name"></h2>
+      <button class="modal-close" id="modal-close">&times;</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
 <script>
 // ─────────────────────────────────────────────────────────────────
 const DEFAULTS = {
@@ -404,6 +534,8 @@ const BAR_COLORS = { done: '#22C55E', inprog: '#F59E0B', todo: '#CBD5E1' };
 
 let activeCfg = null, activeBoardId = null, issuesCache = {};
 let backlogByPerson = {};       // { name: pts }
+let backlogIssuesRaw = [];      // raw backlog issues for modal detail
+let activeSprintId = null;      // currently displayed sprint id
 let allContributors = new Set();
 let teamsByPerson = {};         // { personName: ['Team A', 'Team B'] }
 let allTeamNames = [];          // sorted team names
@@ -676,7 +808,7 @@ function buildBarRows(members, valueFn, barColor, maxVal) {
   return members.map(name => {
     const val = valueFn(name);
     const pct = val > 0 ? Math.max((val / maxVal) * 100, 2) : 0;
-    return `<div class="bar-row">
+    return `<div class="bar-row" data-person="${name}">
       <div class="bar-label" title="${name}">${name}</div>
       <div class="bar-track">
         <div class="bar-fill" style="width:${pct}%;background:${barColor}"></div>
@@ -706,7 +838,7 @@ function buildStackedBarRows(members, dataFn, maxVal) {
       if (todo > 0)   segments += `<div class="bar-segment" style="width:${todoPct}%;background:${BAR_COLORS.todo}" title="To Do: ${fmt(todo)} pts"></div>`;
     }
 
-    return `<div class="bar-row">
+    return `<div class="bar-row" data-person="${name}">
       <div class="bar-label" title="${name}">${name}</div>
       <div class="bar-track">
         <div class="bar-fill-stacked" style="width:${totalPct}%">${segments}</div>
@@ -829,6 +961,101 @@ function renderDashboard(sprintByPerson, sprintLabel) {
   document.getElementById('last-refreshed').textContent = `Last refreshed: ${new Date().toLocaleString()}`;
 }
 
+// ── Person detail modal ──────────────────────────────────────────
+
+document.getElementById('teams-container').addEventListener('click', e => {
+  const row = e.target.closest('.bar-row[data-person]');
+  if (!row) return;
+  showPersonModal(row.dataset.person);
+});
+
+document.getElementById('modal-close').addEventListener('click', () => {
+  document.getElementById('person-modal').classList.remove('open');
+});
+document.getElementById('person-modal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) e.currentTarget.classList.remove('open');
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') document.getElementById('person-modal').classList.remove('open');
+});
+
+function getPersonIssues(name) {
+  const spField = (activeCfg && activeCfg.storyPointsField) || 'customfield_10038';
+  const baseUrl = activeCfg ? activeCfg.baseUrl.replace(/\/$/, '') : '';
+
+  const sprintIssues = (issuesCache[activeSprintId] || [])
+    .filter(i => (i.fields.assignee?.displayName || 'Unassigned') === name && !excludedPeople.has(name));
+  const categorized = { done: [], inprog: [], todo: [] };
+  sprintIssues.forEach(i => {
+    const f = i.fields;
+    const cat = { done: 'done', indeterminate: 'inprog', new: 'todo' }[f.status?.statusCategory?.key] || 'todo';
+    categorized[cat].push({
+      key: i.key,
+      summary: f.summary || '',
+      pts: parseFloat(f[spField]) || 0,
+      status: f.status?.name || '',
+      url: baseUrl ? `${baseUrl}/browse/${i.key}` : '',
+    });
+  });
+
+  const backlog = backlogIssuesRaw
+    .filter(i => (i.fields.assignee?.displayName || 'Unassigned') === name && !excludedPeople.has(name))
+    .map(i => {
+      const f = i.fields;
+      return {
+        key: i.key,
+        summary: f.summary || '',
+        pts: parseFloat(f[spField]) || 0,
+        status: f.status?.name || '',
+        url: baseUrl ? `${baseUrl}/browse/${i.key}` : '',
+      };
+    });
+
+  return { categorized, backlog };
+}
+
+function buildIssueTable(issues) {
+  if (!issues.length) return '<div class="modal-empty">None</div>';
+  const rows = issues.map(i => {
+    const keyCell = i.url
+      ? `<td class="col-key"><a href="${i.url}" target="_blank" rel="noopener">${i.key}</a></td>`
+      : `<td class="col-key">${i.key}</td>`;
+    return `<tr>${keyCell}<td>${i.summary}</td><td class="col-pts">${fmt(i.pts)}</td></tr>`;
+  }).join('');
+  const total = issues.reduce((s, i) => s + i.pts, 0);
+  return `<table class="modal-table">
+    <thead><tr><th>Key</th><th>Summary</th><th>Pts</th></tr></thead>
+    <tbody>${rows}</tbody>
+    <tfoot><tr><td></td><td style="text-align:right;font-weight:600;font-size:12px;color:var(--muted)">Total</td><td class="col-pts" style="font-weight:600">${fmt(total)}</td></tr></tfoot>
+  </table>`;
+}
+
+function showPersonModal(name) {
+  const { categorized, backlog } = getPersonIssues(name);
+  document.getElementById('modal-person-name').textContent = name;
+
+  const sections = [
+    { title: 'Done', color: BAR_COLORS.done, issues: categorized.done },
+    { title: 'In Progress', color: BAR_COLORS.inprog, issues: categorized.inprog },
+    { title: 'To Do', color: BAR_COLORS.todo, issues: categorized.todo },
+    { title: 'Backlog', color: '#94A3B8', issues: backlog },
+  ];
+
+  document.getElementById('modal-body').innerHTML = sections.map(s => {
+    const pts = s.issues.reduce((sum, i) => sum + i.pts, 0);
+    return `<div class="modal-section">
+      <div class="modal-section-title">
+        <span class="modal-section-dot" style="background:${s.color}"></span>
+        ${s.title}
+        <span class="modal-section-pts">${fmt(pts)} pts &middot; ${s.issues.length} issue${s.issues.length !== 1 ? 's' : ''}</span>
+      </div>
+      ${buildIssueTable(s.issues)}
+    </div>`;
+  }).join('');
+
+  document.getElementById('person-modal').classList.add('open');
+}
+
 // ── Sprint switcher ──────────────────────────────────────────────
 
 async function selectSprint(sprint, btnEl) {
@@ -840,6 +1067,7 @@ async function selectSprint(sprint, btnEl) {
     catch(e) { showError(e.message); return; }
     finally { showLoading(false); document.getElementById('dashboard').style.display = 'block'; }
   }
+  activeSprintId = sprint.id;
   const sprintByPerson = processIssues(issuesCache[sprint.id], activeCfg.storyPointsField);
   const dates = sprint.startDate ? ` · ${sprint.startDate.slice(0,10)} – ${sprint.endDate.slice(0,10)}` : '';
   renderDashboard(sprintByPerson, sprint.name + dates);
@@ -904,8 +1132,8 @@ document.getElementById('btn-load').addEventListener('click', async () => {
   showLoading(true);
 
   try {
-    activeCfg = cfg; issuesCache = {}; backlogByPerson = {};
-    allContributors = new Set(); teamsByPerson = {}; allTeamNames = [];
+    activeCfg = cfg; issuesCache = {}; backlogByPerson = {}; backlogIssuesRaw = [];
+    activeSprintId = null; allContributors = new Set(); teamsByPerson = {}; allTeamNames = [];
     accountIdToName = {}; activeTeamTab = null; excludedPeople = new Set();
 
     const { boardId, sprints } = await getSprints(cfg);
@@ -919,10 +1147,12 @@ document.getElementById('btn-load').addEventListener('click', async () => {
 
     // Load backlog
     const backlogIssues = await getBacklog(cfg, boardId);
+    backlogIssuesRaw = backlogIssues;
     backlogByPerson = processBacklog(backlogIssues, cfg.storyPointsField);
 
     // Load active sprint (or first if none active)
     const firstSprint = sprints.find(s => s.state === 'active') || sprints[0];
+    activeSprintId = firstSprint.id;
     issuesCache[firstSprint.id] = await getIssues(cfg, boardId, firstSprint.id);
     const sprintByPerson = processIssues(issuesCache[firstSprint.id], cfg.storyPointsField);
 
@@ -951,6 +1181,7 @@ document.getElementById('btn-demo').addEventListener('click', () => {
   activeCfg = {};
   allContributors = new Set(); teamsByPerson = {}; allTeamNames = [];
   accountIdToName = {}; activeTeamTab = null; excludedPeople = new Set();
+  backlogIssuesRaw = []; activeSprintId = null;
 
   backlogByPerson = {
     'Kyle Jensen':     5,  'Josiah Hepworth': 12, 'Maria Torres': 8,
@@ -1012,6 +1243,64 @@ document.getElementById('btn-demo').addEventListener('click', () => {
 
   demos.forEach(sp => sp.employees.forEach(e => allContributors.add(e.name)));
 
+  // Generate synthetic Jira-like issues for each demo sprint so the modal works
+  const demoTasks = ['Implement API endpoint','Fix login validation','Update dashboard UI','Write unit tests','Refactor data layer',
+    'Add error handling','Optimize query performance','Create migration script','Update documentation','Fix pagination bug',
+    'Add caching layer','Improve search filters','Setup CI pipeline','Review pull requests','Design system updates'];
+  let demoIssueNum = 100;
+  const statusMap = {
+    done:   { name: 'Done',        statusCategory: { key: 'done' } },
+    inprog: { name: 'In Progress', statusCategory: { key: 'indeterminate' } },
+    todo:   { name: 'To Do',       statusCategory: { key: 'new' } },
+  };
+  const spField = activeCfg.storyPointsField || 'customfield_10038';
+
+  function generateDemoIssues(employees) {
+    const issues = [];
+    employees.forEach(emp => {
+      ['done','inprog','todo'].forEach(cat => {
+        let remaining = emp[cat];
+        while (remaining > 0) {
+          const pts = Math.min(remaining, Math.ceil(Math.random() * 3));
+          issues.push({
+            key: `DEMO-${demoIssueNum++}`,
+            fields: {
+              summary: demoTasks[Math.floor(Math.random() * demoTasks.length)],
+              assignee: { displayName: emp.name },
+              status: statusMap[cat],
+              [spField]: pts,
+            },
+          });
+          remaining -= pts;
+        }
+      });
+    });
+    return issues;
+  }
+
+  issuesCache = {};
+  demos.forEach(sp => { issuesCache[sp.id] = generateDemoIssues(sp.employees); });
+
+  // Generate synthetic backlog issues
+  backlogIssuesRaw = Object.entries(backlogByPerson).flatMap(([name, pts]) => {
+    const issues = [];
+    let remaining = pts;
+    while (remaining > 0) {
+      const p = Math.min(remaining, Math.ceil(Math.random() * 3));
+      issues.push({
+        key: `DEMO-${demoIssueNum++}`,
+        fields: {
+          summary: demoTasks[Math.floor(Math.random() * demoTasks.length)],
+          assignee: { displayName: name },
+          status: statusMap.todo,
+          [spField]: p,
+        },
+      });
+      remaining -= p;
+    }
+    return issues;
+  });
+
   function toMap(employees) {
     const m = {};
     employees.forEach(e => { m[e.name] = e; });
@@ -1019,6 +1308,7 @@ document.getElementById('btn-demo').addEventListener('click', () => {
   }
 
   function renderDemoSprint(sp) {
+    activeSprintId = sp.id;
     renderDashboard(toMap(sp.employees), `${sp.name} · ${sp.startDate} – ${sp.endDate}`);
   }
 
