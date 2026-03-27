@@ -917,15 +917,9 @@ function renderDashboard(sprintByPerson, sprintLabel) {
   const teams = getOrderedTeams();
   const container = document.getElementById('teams-container');
 
-  // Compute global maxes for consistent bar scaling across all teams
-  let globalActiveMax = 1, globalBacklogMax = 1;
-  allContributors.forEach(name => {
-    const d = sprintByPerson[name];
-    const activeVal = d ? d.done + d.inprog + d.todo : 0;
-    if (activeVal > globalActiveMax) globalActiveMax = activeVal;
-    const backlogVal = backlogByPerson[name] || 0;
-    if (backlogVal > globalBacklogMax) globalBacklogMax = backlogVal;
-  });
+  // Fixed capacity target for bar scaling (bars overflow past 100% if over 60)
+  const globalActiveMax = 60;
+  const globalBacklogMax = 60;
 
   container.innerHTML = teams.map(teamName => {
     const members = getTeamMembers(teamName);
