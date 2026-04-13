@@ -41,22 +41,14 @@ async function getIssues(cfg, boardId, sprintId) {
     startAt += 100;
   }
 
-  // Diagnostic: fetch a few issues with ALL fields to compare who has points vs not
+  // Diagnostic: compare sprint endpoint data vs REST API data
   const seen = new Set();
   for (const issue of issues) {
     const assignee = issue.fields?.assignee?.displayName || 'Unassigned';
     if (seen.has(assignee) || seen.size >= 5) continue;
     seen.add(assignee);
-    try {
-      const full = await jiraFetch(cfg, `/rest/api/3/issue/${issue.key}`);
-      const f = full.fields;
-      const numeric = {};
-      for (const [k, v] of Object.entries(f)) {
-        if (typeof v === 'number' && v !== 0 && k !== 'workratio') numeric[k] = v;
-      }
-      console.log(`DIAG ${full.key} [${assignee}] numeric:`, JSON.stringify(numeric),
-        '| cf10038:', f.customfield_10038, '| cf10016:', f.customfield_10016);
-    } catch(e) {}
+    const sprintVal = issue.fields?.customfield_10038;
+    console.log(`DIAG ${issue.key} [${assignee}] sprint-endpoint cf10038:`, sprintVal, '| cf10016:', issue.fields?.customfield_10016);
   }
 
   return issues;
