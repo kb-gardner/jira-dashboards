@@ -32,37 +32,32 @@ async function getSprints(cfg) {
 
 async function getIssues(cfg, boardId, sprintId) {
   setLoadingMsg('Loading sprint issues...');
+  const fields = ['assignee', 'status', ...cfg.storyPointsFields, 'summary'].join(',');
   let issues = [], startAt = 0;
   while (true) {
+    const jql = encodeURIComponent(`sprint=${sprintId}`);
     const data = await jiraFetch(cfg,
-      `/rest/agile/1.0/board/${boardId}/sprint/${sprintId}/issue?maxResults=100&startAt=${startAt}&fields=assignee,status,${cfg.storyPointsFields.join(',')},summary`);
+      `/rest/api/3/search?jql=${jql}&maxResults=100&startAt=${startAt}&fields=${fields}`);
     issues = issues.concat(data.issues || []);
     if (issues.length >= data.total || !(data.issues?.length)) break;
     startAt += 100;
   }
-
-  // Diagnostic: how many issues and unique assignees did the sprint endpoint return?
-  const assigneeCounts = {};
-  issues.forEach(issue => {
-    const name = issue.fields?.assignee?.displayName || 'Unassigned';
-    assigneeCounts[name] = (assigneeCounts[name] || 0) + 1;
-  });
-  console.log(`DIAG sprint returned ${issues.length} issues, ${Object.keys(assigneeCounts).length} unique assignees:`, JSON.stringify(assigneeCounts));
-
   return issues;
 }
 
 async function getBacklog(cfg, boardId) {
   setLoadingMsg('Loading backlog...');
+  const fields = ['assignee', 'status', ...cfg.storyPointsFields, 'summary'].join(',');
   let issues = [], startAt = 0;
   while (true) {
+    const jql = encodeURIComponent(`project=${cfg.projectKey} AND sprint is EMPTY AND statusCategory = "To Do"`);
     const data = await jiraFetch(cfg,
-      `/rest/agile/1.0/board/${boardId}/backlog?maxResults=100&startAt=${startAt}&fields=assignee,status,${cfg.storyPointsFields.join(',')},summary`);
+      `/rest/api/3/search?jql=${jql}&maxResults=100&startAt=${startAt}&fields=${fields}`);
     issues = issues.concat(data.issues || []);
     if (issues.length >= data.total || !(data.issues?.length)) break;
     startAt += 100;
   }
-  return issues.filter(issue => issue.fields?.status?.statusCategory?.key === 'new');
+  return issues;
 }
 
 async function discoverStoryPointsField(cfg) {

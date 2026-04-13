@@ -18,8 +18,6 @@ function processIssues(issues, storyPointsFields) {
     byAssignee[name][cat] += pts;
     allContributors.add(name);
   });
-  console.log('DIAG processIssues result:', JSON.stringify(byAssignee));
-  console.log('DIAG excludedPeople:', [...excludedPeople]);
   return byAssignee;
 }
 
