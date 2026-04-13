@@ -41,15 +41,13 @@ async function getIssues(cfg, boardId, sprintId) {
     startAt += 100;
   }
 
-  // Diagnostic: compare sprint endpoint data vs REST API data
-  const seen = new Set();
-  for (const issue of issues) {
-    const assignee = issue.fields?.assignee?.displayName || 'Unassigned';
-    if (seen.has(assignee) || seen.size >= 5) continue;
-    seen.add(assignee);
-    const sprintVal = issue.fields?.customfield_10038;
-    console.log(`DIAG ${issue.key} [${assignee}] sprint-endpoint cf10038:`, sprintVal, '| cf10016:', issue.fields?.customfield_10016);
-  }
+  // Diagnostic: how many issues and unique assignees did the sprint endpoint return?
+  const assigneeCounts = {};
+  issues.forEach(issue => {
+    const name = issue.fields?.assignee?.displayName || 'Unassigned';
+    assigneeCounts[name] = (assigneeCounts[name] || 0) + 1;
+  });
+  console.log(`DIAG sprint returned ${issues.length} issues, ${Object.keys(assigneeCounts).length} unique assignees:`, JSON.stringify(assigneeCounts));
 
   return issues;
 }
