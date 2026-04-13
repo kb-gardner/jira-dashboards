@@ -48,7 +48,7 @@ async function getIssues(cfg, boardId, sprintId) {
 async function getBacklog(cfg, boardId) {
   setLoadingMsg('Loading backlog...');
   const fields = ['assignee', 'status', ...cfg.storyPointsFields, 'summary'].join(',');
-  const jql = encodeURIComponent(`project=${cfg.projectKey} AND sprint is EMPTY AND statusCategory = "To Do" AND assignee is not EMPTY`);
+  const jql = encodeURIComponent(`project=${cfg.projectKey} AND sprint is EMPTY AND statusCategory = "To Do" AND assignee is not EMPTY AND "Story Points" > 0`);
   let issues = [], startAt = 0;
   while (true) {
     const data = await jiraFetch(cfg,
