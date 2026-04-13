@@ -30,34 +30,29 @@ async function getSprints(cfg) {
   return { boardId, sprints };
 }
 
+async function jqlSearch(cfg, jql, fields) {
+  let issues = [], nextPageToken = null;
+  while (true) {
+    let url = `/rest/api/3/search/jql?jql=${encodeURIComponent(jql)}&maxResults=100&fields=${fields}`;
+    if (nextPageToken) url += `&nextPageToken=${encodeURIComponent(nextPageToken)}`;
+    const data = await jiraFetch(cfg, url);
+    issues = issues.concat(data.issues || []);
+    if (!data.nextPageToken || !(data.issues?.length)) break;
+    nextPageToken = data.nextPageToken;
+  }
+  return issues;
+}
+
 async function getIssues(cfg, boardId, sprintId) {
   setLoadingMsg('Loading sprint issues...');
   const fields = ['assignee', 'status', ...cfg.storyPointsFields, 'summary'].join(',');
-  const jql = encodeURIComponent(`sprint=${sprintId}`);
-  let issues = [], startAt = 0;
-  while (true) {
-    const data = await jiraFetch(cfg,
-      `/rest/api/3/search/jql?jql=${jql}&maxResults=100&startAt=${startAt}&fields=${fields}`);
-    issues = issues.concat(data.issues || []);
-    if (issues.length >= data.total || !(data.issues?.length)) break;
-    startAt += 100;
-  }
-  return issues;
+  return jqlSearch(cfg, `sprint=${sprintId}`, fields);
 }
 
 async function getBacklog(cfg, boardId) {
   setLoadingMsg('Loading backlog...');
   const fields = ['assignee', 'status', ...cfg.storyPointsFields, 'summary'].join(',');
-  const jql = encodeURIComponent(`project=${cfg.projectKey} AND sprint is EMPTY AND statusCategory = "To Do" AND assignee is not EMPTY AND "Story Points" > 0`);
-  let issues = [], startAt = 0;
-  while (true) {
-    const data = await jiraFetch(cfg,
-      `/rest/api/3/search/jql?jql=${jql}&maxResults=100&startAt=${startAt}&fields=${fields}`);
-    issues = issues.concat(data.issues || []);
-    if (issues.length >= data.total || !(data.issues?.length)) break;
-    startAt += 100;
-  }
-  return issues;
+  return jqlSearch(cfg, `project=${cfg.projectKey} AND sprint is EMPTY AND statusCategory = "To Do" AND assignee is not EMPTY AND "Story Points" > 0`, fields);
 }
 
 async function discoverStoryPointsField(cfg) {
