@@ -32,14 +32,12 @@ async function getSprints(cfg) {
 
 async function getIssues(cfg, boardId, sprintId) {
   setLoadingMsg('Loading sprint issues...');
-  const fields = ['assignee', 'status', ...cfg.storyPointsFields, 'summary'];
+  const fields = ['assignee', 'status', ...cfg.storyPointsFields, 'summary'].join(',');
+  const jql = encodeURIComponent(`sprint=${sprintId}`);
   let issues = [], startAt = 0;
   while (true) {
-    const data = await jiraFetch(cfg, '/rest/api/3/search/jql', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ jql: `sprint=${sprintId}`, fields, maxResults: 100, startAt }),
-    });
+    const data = await jiraFetch(cfg,
+      `/rest/api/3/search/jql?jql=${jql}&maxResults=100&startAt=${startAt}&fields=${fields}`);
     issues = issues.concat(data.issues || []);
     if (issues.length >= data.total || !(data.issues?.length)) break;
     startAt += 100;
@@ -49,17 +47,12 @@ async function getIssues(cfg, boardId, sprintId) {
 
 async function getBacklog(cfg, boardId) {
   setLoadingMsg('Loading backlog...');
-  const fields = ['assignee', 'status', ...cfg.storyPointsFields, 'summary'];
+  const fields = ['assignee', 'status', ...cfg.storyPointsFields, 'summary'].join(',');
+  const jql = encodeURIComponent(`project=${cfg.projectKey} AND sprint is EMPTY AND statusCategory = "To Do"`);
   let issues = [], startAt = 0;
   while (true) {
-    const data = await jiraFetch(cfg, '/rest/api/3/search/jql', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jql: `project=${cfg.projectKey} AND sprint is EMPTY AND statusCategory = "To Do"`,
-        fields, maxResults: 100, startAt,
-      }),
-    });
+    const data = await jiraFetch(cfg,
+      `/rest/api/3/search/jql?jql=${jql}&maxResults=100&startAt=${startAt}&fields=${fields}`);
     issues = issues.concat(data.issues || []);
     if (issues.length >= data.total || !(data.issues?.length)) break;
     startAt += 100;
