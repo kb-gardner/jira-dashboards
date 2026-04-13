@@ -18,12 +18,7 @@ async function getSprints(cfg) {
   setLoadingMsg('Finding boards...');
   const boards = await jiraFetch(cfg, `/rest/agile/1.0/board?projectKeyOrId=${cfg.projectKey}&maxResults=60`);
   if (!boards.values?.length) throw new Error(`No boards found for project "${cfg.projectKey}"`);
-  console.log('DIAG boards:', boards.values.map(b => `${b.id}: "${b.name}" (${b.type})`));
   const boardId = boards.values[0].id;
-  try {
-    const boardCfg = await jiraFetch(cfg, `/rest/agile/1.0/board/${boardId}/configuration`);
-    console.log('DIAG board filter:', JSON.stringify(boardCfg.filter), 'subQuery:', boardCfg.subQuery);
-  } catch(e) { console.warn('DIAG board config fetch failed:', e.message); }
   setLoadingMsg('Loading sprints...');
   const data = await jiraFetch(cfg, `/rest/agile/1.0/board/${boardId}/sprint?state=active,closed,future&maxResults=60`);
   const order = { closed: 0, active: 1, future: 2 };
@@ -37,11 +32,14 @@ async function getSprints(cfg) {
 
 async function getIssues(cfg, boardId, sprintId) {
   setLoadingMsg('Loading sprint issues...');
-  const fields = ['assignee', 'status', ...cfg.storyPointsFields, 'summary'].join(',');
+  const fields = ['assignee', 'status', ...cfg.storyPointsFields, 'summary'];
   let issues = [], startAt = 0;
   while (true) {
-    const data = await jiraFetch(cfg,
-      `/rest/agile/1.0/board/${boardId}/sprint/${sprintId}/issue?maxResults=100&startAt=${startAt}&fields=${fields}`);
+    const data = await jiraFetch(cfg, '/rest/api/3/search/jql', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jql: `sprint=${sprintId}`, fields, maxResults: 100, startAt }),
+    });
     issues = issues.concat(data.issues || []);
     if (issues.length >= data.total || !(data.issues?.length)) break;
     startAt += 100;
@@ -51,16 +49,22 @@ async function getIssues(cfg, boardId, sprintId) {
 
 async function getBacklog(cfg, boardId) {
   setLoadingMsg('Loading backlog...');
-  const fields = ['assignee', 'status', ...cfg.storyPointsFields, 'summary'].join(',');
+  const fields = ['assignee', 'status', ...cfg.storyPointsFields, 'summary'];
   let issues = [], startAt = 0;
   while (true) {
-    const data = await jiraFetch(cfg,
-      `/rest/agile/1.0/board/${boardId}/backlog?maxResults=100&startAt=${startAt}&fields=${fields}`);
+    const data = await jiraFetch(cfg, '/rest/api/3/search/jql', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jql: `project=${cfg.projectKey} AND sprint is EMPTY AND statusCategory = "To Do"`,
+        fields, maxResults: 100, startAt,
+      }),
+    });
     issues = issues.concat(data.issues || []);
     if (issues.length >= data.total || !(data.issues?.length)) break;
     startAt += 100;
   }
-  return issues.filter(issue => issue.fields?.status?.statusCategory?.key === 'new');
+  return issues;
 }
 
 async function discoverStoryPointsField(cfg) {
