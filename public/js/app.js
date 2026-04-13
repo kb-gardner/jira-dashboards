@@ -28,9 +28,9 @@ document.getElementById('btn-load').addEventListener('click', async () => {
     activeSprintId = null; allContributors = new Set(); teamsByPerson = {}; allTeamNames = [];
     accountIdToName = {}; activeTeamTab = null; excludedPeople = new Set();
 
-    // Auto-detect story points field if not explicitly configured
-    const detectedField = await discoverStoryPointsField(cfg);
-    if (detectedField) cfg.storyPointsField = detectedField;
+    // Auto-detect story points fields
+    const detectedFields = await discoverStoryPointsField(cfg);
+    cfg.storyPointsFields = detectedFields || [cfg.storyPointsField];
 
     const { boardId, sprints } = await getSprints(cfg);
     activeBoardId = boardId;
@@ -44,13 +44,13 @@ document.getElementById('btn-load').addEventListener('click', async () => {
     // Load backlog
     const backlogIssues = await getBacklog(cfg, boardId);
     backlogIssuesRaw = backlogIssues;
-    backlogByPerson = processBacklog(backlogIssues, cfg.storyPointsField);
+    backlogByPerson = processBacklog(backlogIssues, cfg.storyPointsFields);
 
     // Load active sprint (or first if none active)
     const firstSprint = sprints.find(s => s.state === 'active') || sprints[0];
     activeSprintId = firstSprint.id;
     issuesCache[firstSprint.id] = await getIssues(cfg, boardId, firstSprint.id);
-    const sprintByPerson = processIssues(issuesCache[firstSprint.id], cfg.storyPointsField);
+    const sprintByPerson = processIssues(issuesCache[firstSprint.id], cfg.storyPointsFields);
 
     const dates = firstSprint.startDate ? ` · ${firstSprint.startDate.slice(0,10)} – ${firstSprint.endDate.slice(0,10)}` : '';
     renderDashboard(sprintByPerson, firstSprint.name + dates);

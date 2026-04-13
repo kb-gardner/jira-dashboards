@@ -35,7 +35,7 @@ async function getIssues(cfg, boardId, sprintId) {
   let issues = [], startAt = 0;
   while (true) {
     const data = await jiraFetch(cfg,
-      `/rest/agile/1.0/board/${boardId}/sprint/${sprintId}/issue?maxResults=100&startAt=${startAt}&fields=assignee,status,${cfg.storyPointsField},summary`);
+      `/rest/agile/1.0/board/${boardId}/sprint/${sprintId}/issue?maxResults=100&startAt=${startAt}&fields=assignee,status,${cfg.storyPointsFields.join(',')},summary`);
     issues = issues.concat(data.issues || []);
     if (issues.length >= data.total || !(data.issues?.length)) break;
     startAt += 100;
@@ -48,7 +48,7 @@ async function getBacklog(cfg, boardId) {
   let issues = [], startAt = 0;
   while (true) {
     const data = await jiraFetch(cfg,
-      `/rest/agile/1.0/board/${boardId}/backlog?maxResults=100&startAt=${startAt}&fields=assignee,status,${cfg.storyPointsField},summary`);
+      `/rest/agile/1.0/board/${boardId}/backlog?maxResults=100&startAt=${startAt}&fields=assignee,status,${cfg.storyPointsFields.join(',')},summary`);
     issues = issues.concat(data.issues || []);
     if (issues.length >= data.total || !(data.issues?.length)) break;
     startAt += 100;
@@ -66,12 +66,9 @@ async function discoverStoryPointsField(cfg) {
       spPatterns.some(p => (f.name || '').toLowerCase().includes(p))
     );
     if (candidates.length) {
-      // Prefer "Story Points" or "Story point estimate" exact matches, then any match
-      const exact = candidates.find(f => f.name.toLowerCase() === 'story points')
-        || candidates.find(f => f.name.toLowerCase() === 'story point estimate')
-        || candidates[0];
-      console.log(`Auto-detected story points field: "${exact.name}" → ${exact.id}`);
-      return exact.id;
+      console.log('All story point field candidates:', candidates.map(f => `"${f.name}" → ${f.id}`));
+      // Return ALL candidate field IDs so we can try each one
+      return candidates.map(f => f.id);
     }
   } catch(e) {
     console.warn('Could not auto-detect story points field:', e.message);

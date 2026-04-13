@@ -8,7 +8,7 @@ async function selectSprint(sprint, btnEl) {
     finally { showLoading(false); document.getElementById('dashboard').style.display = 'block'; }
   }
   activeSprintId = sprint.id;
-  const sprintByPerson = processIssues(issuesCache[sprint.id], activeCfg.storyPointsField);
+  const sprintByPerson = processIssues(issuesCache[sprint.id], activeCfg.storyPointsFields);
   const dates = sprint.startDate ? ` · ${sprint.startDate.slice(0,10)} – ${sprint.endDate.slice(0,10)}` : '';
   renderDashboard(sprintByPerson, sprint.name + dates);
 }
