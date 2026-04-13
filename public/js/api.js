@@ -41,21 +41,22 @@ async function getIssues(cfg, boardId, sprintId) {
     startAt += 100;
   }
 
-  // Diagnostic: fetch one issue with ALL fields to find where points live
-  if (issues.length) {
+  // Diagnostic: fetch a few issues with ALL fields to compare who has points vs not
+  const seen = new Set();
+  for (const issue of issues) {
+    const assignee = issue.fields?.assignee?.displayName || 'Unassigned';
+    if (seen.has(assignee) || seen.size >= 5) continue;
+    seen.add(assignee);
     try {
-      const sample = await jiraFetch(cfg, `/rest/api/3/issue/${issues[0].key}`);
-      const f = sample.fields;
+      const full = await jiraFetch(cfg, `/rest/api/3/issue/${issue.key}`);
+      const f = full.fields;
       const numeric = {};
       for (const [k, v] of Object.entries(f)) {
-        if (typeof v === 'number') numeric[k] = v;
+        if (typeof v === 'number' && v !== 0 && k !== 'workratio') numeric[k] = v;
       }
-      console.log('DIAG issue:', sample.key, 'assignee:', f.assignee?.displayName);
-      console.log('DIAG all numeric fields:', JSON.stringify(numeric));
-      console.log('DIAG customfield_10038:', f.customfield_10038);
-      console.log('DIAG customfield_10016:', f.customfield_10016);
-      console.log('DIAG story_points:', f.story_points);
-    } catch(e) { console.warn('DIAG fetch failed:', e.message); }
+      console.log(`DIAG ${full.key} [${assignee}] numeric:`, JSON.stringify(numeric),
+        '| cf10038:', f.customfield_10038, '| cf10016:', f.customfield_10016);
+    } catch(e) {}
   }
 
   return issues;
