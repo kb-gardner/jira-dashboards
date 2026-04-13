@@ -56,6 +56,29 @@ async function getBacklog(cfg, boardId) {
   return issues.filter(issue => issue.fields?.status?.statusCategory?.key === 'new');
 }
 
+async function discoverStoryPointsField(cfg) {
+  setLoadingMsg('Detecting story points field...');
+  try {
+    const fields = await jiraFetch(cfg, '/rest/api/3/field');
+    // Look for story point fields by common names (case-insensitive)
+    const spPatterns = ['story points', 'story point estimate', 'story_points'];
+    const candidates = fields.filter(f =>
+      spPatterns.some(p => (f.name || '').toLowerCase().includes(p))
+    );
+    if (candidates.length) {
+      // Prefer "Story Points" or "Story point estimate" exact matches, then any match
+      const exact = candidates.find(f => f.name.toLowerCase() === 'story points')
+        || candidates.find(f => f.name.toLowerCase() === 'story point estimate')
+        || candidates[0];
+      console.log(`Auto-detected story points field: "${exact.name}" → ${exact.id}`);
+      return exact.id;
+    }
+  } catch(e) {
+    console.warn('Could not auto-detect story points field:', e.message);
+  }
+  return null;
+}
+
 async function getProjectMembers(cfg) {
   setLoadingMsg('Loading team members...');
   let users = [], startAt = 0;

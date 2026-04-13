@@ -28,6 +28,10 @@ document.getElementById('btn-load').addEventListener('click', async () => {
     activeSprintId = null; allContributors = new Set(); teamsByPerson = {}; allTeamNames = [];
     accountIdToName = {}; activeTeamTab = null; excludedPeople = new Set();
 
+    // Auto-detect story points field if not explicitly configured
+    const detectedField = await discoverStoryPointsField(cfg);
+    if (detectedField) cfg.storyPointsField = detectedField;
+
     const { boardId, sprints } = await getSprints(cfg);
     activeBoardId = boardId;
 
