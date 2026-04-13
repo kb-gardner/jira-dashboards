@@ -40,6 +40,24 @@ async function getIssues(cfg, boardId, sprintId) {
     if (issues.length >= data.total || !(data.issues?.length)) break;
     startAt += 100;
   }
+
+  // Diagnostic: fetch one issue with ALL fields to find where points live
+  if (issues.length) {
+    try {
+      const sample = await jiraFetch(cfg, `/rest/api/3/issue/${issues[0].key}`);
+      const f = sample.fields;
+      const numeric = {};
+      for (const [k, v] of Object.entries(f)) {
+        if (typeof v === 'number') numeric[k] = v;
+      }
+      console.log('DIAG issue:', sample.key, 'assignee:', f.assignee?.displayName);
+      console.log('DIAG all numeric fields:', JSON.stringify(numeric));
+      console.log('DIAG customfield_10038:', f.customfield_10038);
+      console.log('DIAG customfield_10016:', f.customfield_10016);
+      console.log('DIAG story_points:', f.story_points);
+    } catch(e) { console.warn('DIAG fetch failed:', e.message); }
+  }
+
   return issues;
 }
 
