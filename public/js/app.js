@@ -129,8 +129,9 @@ document.getElementById('btn-load').addEventListener('click', async () => {
 async function refreshCurrentView() {
   if (!activeCfg) return;
   if (activeTopTab === 'priority') {
-    if (!activeDepartment) return;
-    await loadAndRenderPriorityIssues();
+    // Re-pull department list too so newly added departments show up
+    allDepartments = [];
+    await refreshPriorityView();
     document.getElementById('last-refreshed').textContent = `Last refreshed: ${new Date().toLocaleString()}`;
     return;
   }
