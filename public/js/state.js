@@ -19,6 +19,7 @@ let activeCfg = null, activeBoardId = null, issuesCache = {};
 let backlogByPerson = {};       // { name: pts }
 let backlogIssuesRaw = [];      // raw backlog issues for modal detail
 let activeSprintId = null;      // currently displayed sprint id
+let activeSprints = [];         // currently loaded sprints array
 let allContributors = new Set();
 let teamsByPerson = {};         // { personName: ['Team A', 'Team B'] }
 let allTeamNames = [];          // sorted team names
@@ -26,3 +27,20 @@ let accountIdToName = {};       // { accountId: displayName } for team member re
 let activeTeamTab = null;       // currently selected team tab
 let excludedPeople = new Set(); // members of "non dashboard" team
 let serverConfig = null;        // populated from /config endpoint
+
+// Priority view state
+let activeTopTab = 'capacity';  // 'capacity' | 'priority'
+let activeDepartment = null;    // currently selected department in priority view
+let allDepartments = [];        // discovered department option values
+let priorityIssues = [];        // issues for current department, sorted
+
+// ── Preferences (localStorage) ───────────────────────────────────
+function savePref(key, val) {
+  try {
+    if (val === null || val === undefined) localStorage.removeItem('dash:' + key);
+    else localStorage.setItem('dash:' + key, String(val));
+  } catch (e) { /* ignore */ }
+}
+function loadPref(key) {
+  try { return localStorage.getItem('dash:' + key); } catch (e) { return null; }
+}

@@ -13,14 +13,17 @@ function buildTeamTabs() {
     tabsContainer.appendChild(btn);
   });
 
-  const defaultTeam = activeTeamTab && teams.includes(activeTeamTab)
-    ? activeTeamTab
-    : (teams.includes('Technology All') ? 'Technology All' : teams[0]);
+  const savedTeam = loadPref('teamTab');
+  const defaultTeam =
+    (activeTeamTab && teams.includes(activeTeamTab)) ? activeTeamTab :
+    (savedTeam && teams.includes(savedTeam)) ? savedTeam :
+    (teams.includes('Technology All') ? 'Technology All' : teams[0]);
   switchTeamTab(defaultTeam);
 }
 
 function switchTeamTab(teamName) {
   activeTeamTab = teamName;
+  savePref('teamTab', teamName);
   document.querySelectorAll('.team-tab').forEach(btn => {
     btn.classList.toggle('active', btn.textContent === teamName);
   });

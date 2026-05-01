@@ -60,12 +60,31 @@
     </div>
     <div class="header-right">
       <div class="sprint-selector" id="sprint-selector"></div>
+      <button class="btn btn-ghost" id="btn-refresh" title="Refresh data" style="font-size:12px;padding:8px 14px">Refresh</button>
       <button class="btn btn-ghost" id="btn-reconfigure" style="font-size:12px;padding:8px 14px">Reconfigure</button>
+      <a class="btn btn-ghost" id="btn-logout" href="/logout" style="font-size:12px;padding:8px 14px;text-decoration:none;display:inline-block;line-height:1.5">Log out</a>
     </div>
   </header>
 
-  <div id="team-tabs" style="display:none"></div>
-  <div id="teams-container"></div>
+  <div id="top-tabs">
+    <button class="top-tab active" data-top-tab="capacity">Capacity</button>
+    <button class="top-tab" data-top-tab="priority">Priority</button>
+  </div>
+
+  <div id="capacity-view">
+    <div id="team-tabs" style="display:none"></div>
+    <div id="teams-container"></div>
+  </div>
+
+  <div id="priority-view" style="display:none">
+    <div class="priority-controls">
+      <label class="priority-controls-label">Department</label>
+      <select id="priority-dept-select"></select>
+      <span id="priority-meta"></span>
+    </div>
+    <div id="priority-list"></div>
+  </div>
+
   <div class="last-refreshed" id="last-refreshed"></div>
 </div>
 
@@ -89,6 +108,8 @@
 <script src="js/dashboard.js"></script>
 <script src="js/modal.js"></script>
 <script src="js/sprint.js"></script>
+<script src="js/priority.js"></script>
+<script src="js/tabs.js"></script>
 <script src="js/demo.js"></script>
 <script src="js/app.js"></script>
 </body>

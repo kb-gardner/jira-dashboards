@@ -1,5 +1,68 @@
 // ── Load from Jira ───────────────────────────────────────────────
 
+async function loadAll(cfg, opts = {}) {
+  const { preserveSelection = false } = opts;
+  const prevSprintId = preserveSelection ? activeSprintId : null;
+  const prevTeamTab = preserveSelection ? activeTeamTab : null;
+  const prevDepartment = preserveSelection ? activeDepartment : null;
+
+  issuesCache = {}; backlogByPerson = {}; backlogIssuesRaw = [];
+  activeSprintId = null; allContributors = new Set(); teamsByPerson = {}; allTeamNames = [];
+  accountIdToName = {}; activeTeamTab = preserveSelection ? prevTeamTab : null; excludedPeople = new Set();
+  priorityIssues = []; allDepartments = [];
+
+  // Auto-detect Jira fields (story points, dept priority, submission, department)
+  const fieldIds = await discoverFields(cfg);
+  cfg.storyPointsFields = fieldIds.storyPoints;
+  cfg.deptPriorityField = fieldIds.deptPriority;
+  cfg.submissionField   = fieldIds.submission;
+  cfg.departmentField   = fieldIds.department;
+
+  const { boardId, sprints } = await getSprints(cfg);
+  activeBoardId = boardId;
+  activeSprints = sprints;
+
+  // Load project members
+  await getProjectMembers(cfg);
+
+  // Load team assignments
+  await loadTeams(cfg);
+
+  // Load backlog
+  const backlogIssues = await getBacklog(cfg, boardId);
+  backlogIssuesRaw = backlogIssues;
+  backlogByPerson = processBacklog(backlogIssues, cfg.storyPointsFields);
+
+  // Pick the sprint to show: previously selected (if still present) > saved > active > first
+  const savedSprintId = loadPref('sprintId');
+  let firstSprint =
+    (prevSprintId && sprints.find(s => String(s.id) === String(prevSprintId))) ||
+    (savedSprintId && sprints.find(s => String(s.id) === savedSprintId)) ||
+    sprints.find(s => s.state === 'active') ||
+    sprints[0];
+
+  activeSprintId = firstSprint.id;
+  savePref('sprintId', firstSprint.id);
+
+  issuesCache[firstSprint.id] = await getIssues(cfg, boardId, firstSprint.id);
+  const sprintByPerson = processIssues(issuesCache[firstSprint.id], cfg.storyPointsFields);
+
+  const dates = firstSprint.startDate ? ` · ${firstSprint.startDate.slice(0,10)} – ${firstSprint.endDate.slice(0,10)}` : '';
+  renderDashboard(sprintByPerson, firstSprint.name + dates);
+  buildSprintSelector(sprints);
+
+  // Restore top tab; if priority, refresh that view
+  const savedTopTab = loadPref('topTab') || 'capacity';
+  setTopTab(savedTopTab);
+
+  // If priority tab is active, restore department too
+  if (savedTopTab === 'priority') {
+    const savedDept = prevDepartment || loadPref('department');
+    if (savedDept) activeDepartment = savedDept;
+    await refreshPriorityView();
+  }
+}
+
 document.getElementById('btn-load').addEventListener('click', async () => {
   const hasServerAuth = serverConfig && serverConfig.hasAuth;
   const cfg = {
@@ -24,37 +87,24 @@ document.getElementById('btn-load').addEventListener('click', async () => {
   showLoading(true);
 
   try {
-    activeCfg = cfg; issuesCache = {}; backlogByPerson = {}; backlogIssuesRaw = [];
-    activeSprintId = null; allContributors = new Set(); teamsByPerson = {}; allTeamNames = [];
-    accountIdToName = {}; activeTeamTab = null; excludedPeople = new Set();
+    activeCfg = cfg;
+    await loadAll(cfg);
+    showLoading(false);
+    document.getElementById('dashboard').style.display = 'block';
+  } catch(e) {
+    showError(e.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
 
-    // Auto-detect story points fields
-    const detectedFields = await discoverStoryPointsField(cfg);
-    cfg.storyPointsFields = detectedFields || [cfg.storyPointsField];
-
-    const { boardId, sprints } = await getSprints(cfg);
-    activeBoardId = boardId;
-
-    // Load project members
-    await getProjectMembers(cfg);
-
-    // Load team assignments
-    await loadTeams(cfg);
-
-    // Load backlog
-    const backlogIssues = await getBacklog(cfg, boardId);
-    backlogIssuesRaw = backlogIssues;
-    backlogByPerson = processBacklog(backlogIssues, cfg.storyPointsFields);
-
-    // Load active sprint (or first if none active)
-    const firstSprint = sprints.find(s => s.state === 'active') || sprints[0];
-    activeSprintId = firstSprint.id;
-    issuesCache[firstSprint.id] = await getIssues(cfg, boardId, firstSprint.id);
-    const sprintByPerson = processIssues(issuesCache[firstSprint.id], cfg.storyPointsFields);
-
-    const dates = firstSprint.startDate ? ` · ${firstSprint.startDate.slice(0,10)} – ${firstSprint.endDate.slice(0,10)}` : '';
-    renderDashboard(sprintByPerson, firstSprint.name + dates);
-    buildSprintSelector(sprints);
+document.getElementById('btn-refresh').addEventListener('click', async () => {
+  if (!activeCfg) return;
+  const btn = document.getElementById('btn-refresh');
+  btn.disabled = true;
+  showLoading(true);
+  try {
+    await loadAll(activeCfg, { preserveSelection: true });
     showLoading(false);
     document.getElementById('dashboard').style.display = 'block';
   } catch(e) {

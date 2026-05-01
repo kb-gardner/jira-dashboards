@@ -55,24 +55,112 @@ async function getBacklog(cfg, boardId) {
   return jqlSearch(cfg, `project=${cfg.projectKey} AND sprint is EMPTY AND statusCategory = "To Do" AND assignee is not EMPTY AND "Story Points" > 0`, fields);
 }
 
-async function discoverStoryPointsField(cfg) {
-  setLoadingMsg('Detecting story points field...');
+async function getDepartmentOptions(cfg) {
+  setLoadingMsg('Loading departments...');
+  if (!cfg.departmentField) return [];
+  // Use Jira autocomplete suggestions for the field — much cheaper than aggregating from issues.
+  try {
+    const data = await jiraFetch(cfg, `/rest/api/3/jql/autocompletedata/suggestions?fieldName=${encodeURIComponent('Department')}`);
+    const results = (data && data.results) || [];
+    const values = results.map(r => r.value).filter(Boolean);
+    if (values.length) return values.sort((a, b) => a.localeCompare(b));
+  } catch (e) {
+    console.warn('Department autocomplete failed, falling back to issue scan:', e.message);
+  }
+  // Fallback: scan issues with department set
+  const issues = await jqlSearch(
+    cfg,
+    `project=${cfg.projectKey} AND "Department" is not EMPTY`,
+    cfg.departmentField
+  );
+  const set = new Set();
+  issues.forEach(i => {
+    const v = i.fields[cfg.departmentField];
+    const value = Array.isArray(v) ? v.map(x => x.value || x.name || x).join(', ') : (v && (v.value || v.name)) || v;
+    if (value) set.add(value);
+  });
+  return [...set].sort((a, b) => a.localeCompare(b));
+}
+
+async function getDepartmentIssues(cfg, departmentValue) {
+  setLoadingMsg(`Loading ${departmentValue}...`);
+  const fields = [
+    'assignee', 'status', 'summary',
+    cfg.deptPriorityField,
+    cfg.submissionField,
+    cfg.departmentField,
+  ].filter(Boolean).join(',');
+  // Quote the department value (escape any embedded quotes)
+  const safe = String(departmentValue).replace(/"/g, '\\"');
+  const jql = `project=${cfg.projectKey} AND "Department" = "${safe}"`;
+  return jqlSearch(cfg, jql, fields);
+}
+
+async function updateIssuePriority(cfg, issueKey, fieldId, value) {
+  const url = `${cfg.corsProxy}${cfg.baseUrl.replace(/\/$/, '')}/rest/api/3/issue/${encodeURIComponent(issueKey)}`;
+  const headers = {
+    'Accept': 'application/json',
+    'Content-Type': 'application/json',
+    'X-Requested-With': 'XMLHttpRequest',
+  };
+  if (!(serverConfig && serverConfig.hasAuth)) {
+    headers['Authorization'] = 'Basic ' + btoa(`${cfg.email}:${cfg.apiToken}`);
+  }
+  const body = JSON.stringify({ fields: { [fieldId]: value } });
+  const r = await fetch(url, { method: 'PUT', headers, body });
+  if (!r.ok) {
+    const t = await r.text();
+    throw new Error(`Jira ${r.status}: ${t.slice(0, 300)}`);
+  }
+}
+
+async function discoverFields(cfg) {
+  setLoadingMsg('Detecting Jira fields...');
+  const result = {
+    storyPoints: [cfg.storyPointsField || 'customfield_10038'],
+    deptPriority: (serverConfig && serverConfig.deptPriorityField) || null,
+    submission:   (serverConfig && serverConfig.submissionField)   || null,
+    department:   (serverConfig && serverConfig.departmentField)   || null,
+  };
+
   try {
     const fields = await jiraFetch(cfg, '/rest/api/3/field');
-    // Look for story point fields by common names (case-insensitive)
-    const spPatterns = ['story points', 'story point estimate', 'story_points'];
-    const candidates = fields.filter(f =>
-      spPatterns.some(p => (f.name || '').toLowerCase().includes(p))
+    const lower = name => (name || '').toLowerCase();
+
+    const spCandidates = fields.filter(f =>
+      ['story points', 'story point estimate', 'story_points'].some(p => lower(f.name).includes(p))
     );
-    if (candidates.length) {
-      console.log('All story point field candidates:', candidates.map(f => `"${f.name}" → ${f.id}`));
-      // Return ALL candidate field IDs so we can try each one
-      return candidates.map(f => f.id);
+    if (spCandidates.length) {
+      result.storyPoints = spCandidates.map(f => f.id);
     }
+
+    const findExact = displayName => {
+      const want = displayName.toLowerCase();
+      return fields.find(f => lower(f.name) === want);
+    };
+    const findContains = displayName => {
+      const want = displayName.toLowerCase();
+      return fields.find(f => lower(f.name).includes(want));
+    };
+
+    if (!result.deptPriority) {
+      const f = findExact('department priority number') || findContains('department priority');
+      if (f) result.deptPriority = f.id;
+    }
+    if (!result.submission) {
+      const f = findExact('sprint submission status') || findContains('sprint submission');
+      if (f) result.submission = f.id;
+    }
+    if (!result.department) {
+      const f = findExact('department') || fields.find(f => lower(f.name) === 'department' && f.custom);
+      if (f) result.department = f.id;
+    }
+
+    console.log('Field discovery:', result);
   } catch(e) {
-    console.warn('Could not auto-detect story points field:', e.message);
+    console.warn('Field discovery failed:', e.message);
   }
-  return null;
+  return result;
 }
 
 async function getProjectMembers(cfg) {
