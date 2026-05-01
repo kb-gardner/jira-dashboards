@@ -98,19 +98,51 @@ document.getElementById('btn-load').addEventListener('click', async () => {
   }
 });
 
+async function refreshCurrentView() {
+  if (!activeCfg) return;
+  if (activeTopTab === 'priority') {
+    if (!activeDepartment) return;
+    await loadAndRenderPriorityIssues();
+    document.getElementById('last-refreshed').textContent = `Last refreshed: ${new Date().toLocaleString()}`;
+    return;
+  }
+  // Capacity tab: refresh just the active sprint + backlog
+  if (activeSprintId == null) return;
+  setLoadingMsg('Refreshing current sprint...');
+  const [sprintIssues, backlogIssues] = await Promise.all([
+    getIssues(activeCfg, activeBoardId, activeSprintId),
+    getBacklog(activeCfg, activeBoardId),
+  ]);
+  issuesCache[activeSprintId] = sprintIssues;
+  backlogIssuesRaw = backlogIssues;
+  backlogByPerson = processBacklog(backlogIssues, activeCfg.storyPointsFields);
+
+  const sprint = (activeSprints || []).find(s => String(s.id) === String(activeSprintId));
+  const dates = sprint && sprint.startDate
+    ? ` · ${sprint.startDate.slice(0,10)} – ${sprint.endDate.slice(0,10)}`
+    : '';
+  const label = sprint ? sprint.name + dates : '';
+  const sprintByPerson = processIssues(sprintIssues, activeCfg.storyPointsFields);
+  renderDashboard(sprintByPerson, label);
+}
+
 document.getElementById('btn-refresh').addEventListener('click', async () => {
   if (!activeCfg) return;
   const btn = document.getElementById('btn-refresh');
   btn.disabled = true;
+  const orig = btn.textContent;
+  btn.textContent = 'Refreshing...';
   showLoading(true);
   try {
-    await loadAll(activeCfg, { preserveSelection: true });
-    showLoading(false);
-    document.getElementById('dashboard').style.display = 'block';
-  } catch(e) {
+    await refreshCurrentView();
+  } catch (e) {
     showError(e.message);
+    return;
   } finally {
     btn.disabled = false;
+    btn.textContent = orig;
+    showLoading(false);
+    document.getElementById('dashboard').style.display = 'block';
   }
 });
 
