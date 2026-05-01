@@ -150,6 +150,7 @@ function renderPriorityList() {
     ${priorityIssues.map(i => priorityRowHtml(i, baseUrl)).join('')}
   `;
   attachDragHandlers();
+  attachInlineEditHandlers();
 }
 
 function priorityRowHtml(i, baseUrl) {
@@ -158,7 +159,7 @@ function priorityRowHtml(i, baseUrl) {
   const subLabel = i.submission || '—';
   return `<div class="priority-row" draggable="true" data-key="${i.key}">
     <div class="pri-handle" title="Drag to reorder">⋮⋮</div>
-    <div class="pri-num"><span class="pri-num-badge">${priText}</span></div>
+    <div class="pri-num"><span class="pri-num-badge editable" title="Click to edit priority">${priText}</span></div>
     <div class="pri-summary">
       <a href="${url}" target="_blank" rel="noopener">${escapeHtml(i.summary)}</a>
       <span class="pri-key">${i.key}</span>
@@ -229,42 +230,156 @@ async function onDrop(e) {
   const targetIdx = priorityIssues.findIndex(i => i.key === targetKey);
   if (sourceIdx === -1 || targetIdx === -1) return;
 
-  const source = priorityIssues[sourceIdx];
-  const target = priorityIssues[targetIdx];
+  // Compute final insert index in the post-splice array.
+  let insertIdx = dropBefore ? targetIdx : targetIdx + 1;
+  if (insertIdx > sourceIdx) insertIdx -= 1;
+  if (insertIdx === sourceIdx) return; // no movement
 
-  // Pick the neighbor whose priority we copy.
-  // dropBefore: drop above target -> adopt target's priority.
-  // !dropBefore: drop below target -> adopt next row's priority, or target's if no next row.
-  const neighborIdx = dropBefore ? targetIdx : Math.min(targetIdx + 1, priorityIssues.length - 1);
-  const neighbor = priorityIssues[neighborIdx];
+  await applyMove(sourceIdx, insertIdx);
+}
 
-  let newPri = neighbor._priority;
-  if (newPri != null) newPri = Math.max(1, Math.min(20, newPri));
-
-  // Compute the new index after splice to keep visual order matching drop intent.
+// Cascade rule:
+//   - Source keeps its priority value.
+//   - When source moves UP (toIdx < fromIdx): the rows that got displaced down
+//     ([toIdx+1 .. fromIdx]) must each have priority >= a running floor that
+//     starts at source.priority and only increases.
+//   - When source moves DOWN (toIdx > fromIdx): the rows that got displaced up
+//     ([fromIdx .. toIdx-1]) must each have priority <= a running ceiling that
+//     starts at source.priority and only decreases.
+//   - Rows with null priority are skipped (don't constrain or get changed).
+async function applyMove(fromIdx, toIdx) {
   const arr = priorityIssues.slice();
-  arr.splice(sourceIdx, 1);
-  let insertIdx = arr.findIndex(i => i.key === targetKey);
-  if (insertIdx === -1) insertIdx = arr.length;
-  if (!dropBefore) insertIdx += 1;
-  arr.splice(insertIdx, 0, source);
+  const source = arr[fromIdx];
+  arr.splice(fromIdx, 1);
+  arr.splice(toIdx, 0, source);
 
-  const prevPri = source._priority;
+  const updates = [];
+  if (source._priority != null) {
+    if (toIdx < fromIdx) {
+      let floor = source._priority;
+      for (let k = toIdx + 1; k <= fromIdx; k++) {
+        const cur = arr[k]._priority;
+        if (cur == null) continue;
+        if (cur < floor) {
+          updates.push({ issue: arr[k], oldP: cur, newP: floor });
+        } else if (cur > floor) {
+          floor = cur;
+        }
+      }
+    } else if (toIdx > fromIdx) {
+      let ceiling = source._priority;
+      for (let k = toIdx - 1; k >= fromIdx; k--) {
+        const cur = arr[k]._priority;
+        if (cur == null) continue;
+        if (cur > ceiling) {
+          updates.push({ issue: arr[k], oldP: cur, newP: ceiling });
+        } else if (cur < ceiling) {
+          ceiling = cur;
+        }
+      }
+    }
+  }
+
+  // Optimistic state — apply updates and reorder.
   const prevOrder = priorityIssues.slice();
-  source._priority = newPri;
+  const prevPriorities = updates.map(u => ({ issue: u.issue, p: u.oldP }));
+  updates.forEach(u => { u.issue._priority = u.newP; });
   priorityIssues = arr;
   renderPriorityList();
 
-  if (newPri === prevPri) return; // visual reorder only, nothing to persist
+  if (!updates.length) return;
 
   try {
-    await updateIssuePriority(activeCfg, source.key, activeCfg.deptPriorityField, newPri);
+    for (const u of updates) {
+      await updateIssuePriority(activeCfg, u.issue.key, activeCfg.deptPriorityField, u.newP);
+    }
   } catch (err) {
-    source._priority = prevPri;
+    prevPriorities.forEach(p => { p.issue._priority = p.p; });
     priorityIssues = prevOrder;
     renderPriorityList();
-    alert(`Failed to update priority for ${source.key}: ${err.message}`);
+    alert(`Failed to update priorities: ${err.message}`);
   }
+}
+
+// ── Inline priority edit ─────────────────────────────────────────
+
+function attachInlineEditHandlers() {
+  document.querySelectorAll('#priority-list .pri-num-badge.editable').forEach(badge => {
+    badge.addEventListener('click', onPriorityBadgeClick);
+    badge.addEventListener('mousedown', e => e.stopPropagation());
+  });
+}
+
+function onPriorityBadgeClick(e) {
+  e.stopPropagation();
+  const badge = e.currentTarget;
+  const row = badge.closest('.priority-row');
+  if (!row) return;
+  const key = row.dataset.key;
+  const issue = priorityIssues.find(i => i.key === key);
+  if (!issue) return;
+
+  // Make the row not draggable while editing
+  row.setAttribute('draggable', 'false');
+
+  const input = document.createElement('input');
+  input.type = 'number';
+  input.className = 'pri-num-input';
+  input.value = issue._priority != null ? String(issue._priority) : '';
+  input.placeholder = '—';
+  input.min = '1';
+  input.step = '1';
+
+  badge.replaceWith(input);
+  input.focus();
+  input.select();
+
+  let done = false;
+  let cancelled = false;
+
+  const finish = async () => {
+    if (done) return;
+    done = true;
+    if (cancelled) {
+      renderPriorityList();
+      return;
+    }
+    const raw = input.value.trim();
+    let newP = null;
+    if (raw !== '') {
+      const n = parseInt(raw, 10);
+      if (!Number.isFinite(n) || n < 1) {
+        alert('Priority must be a positive integer (or empty to clear).');
+        renderPriorityList();
+        return;
+      }
+      newP = n;
+    }
+    if (newP === issue._priority) {
+      renderPriorityList();
+      return;
+    }
+    const oldP = issue._priority;
+    issue._priority = newP;
+    priorityIssues.sort(comparePriorityIssues);
+    renderPriorityList();
+    try {
+      await updateIssuePriority(activeCfg, issue.key, activeCfg.deptPriorityField, newP);
+    } catch (err) {
+      issue._priority = oldP;
+      priorityIssues.sort(comparePriorityIssues);
+      renderPriorityList();
+      alert(`Failed to update ${issue.key}: ${err.message}`);
+    }
+  };
+
+  input.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter') { ev.preventDefault(); input.blur(); }
+    else if (ev.key === 'Escape') { cancelled = true; input.blur(); }
+  });
+  input.addEventListener('blur', finish);
+  input.addEventListener('mousedown', (ev) => ev.stopPropagation());
+  input.addEventListener('click', (ev) => ev.stopPropagation());
 }
 
 // Department select change
