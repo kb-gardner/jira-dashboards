@@ -1,3 +1,11 @@
+function stripJqlQuotes(s) {
+  if (typeof s !== 'string') return s;
+  if (s.length >= 2 && s.startsWith('"') && s.endsWith('"')) {
+    return s.slice(1, -1).replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+  }
+  return s;
+}
+
 function jiraFetch(cfg, apiPath, opts = {}) {
   const url = `${cfg.corsProxy}${cfg.baseUrl.replace(/\/$/,'')}${apiPath}`;
   const headers = {
@@ -62,7 +70,10 @@ async function getDepartmentOptions(cfg) {
   try {
     const data = await jiraFetch(cfg, `/rest/api/3/jql/autocompletedata/suggestions?fieldName=${encodeURIComponent('Department')}`);
     const results = (data && data.results) || [];
-    const values = results.map(r => r.value).filter(Boolean);
+    // Prefer displayName (human label) over value (which is JQL-formatted: quoted if it has spaces).
+    const values = results
+      .map(r => r.displayName || stripJqlQuotes(r.value))
+      .filter(Boolean);
     if (values.length) return values.sort((a, b) => a.localeCompare(b));
   } catch (e) {
     console.warn('Department autocomplete failed, falling back to issue scan:', e.message);
