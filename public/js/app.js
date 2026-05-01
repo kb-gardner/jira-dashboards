@@ -2,60 +2,88 @@
 
 async function loadAll(cfg, opts = {}) {
   const { preserveSelection = false } = opts;
+  const prevBoardId = preserveSelection ? activeBoardId : null;
   const prevSprintId = preserveSelection ? activeSprintId : null;
   const prevTeamTab = preserveSelection ? activeTeamTab : null;
   const prevDepartment = preserveSelection ? activeDepartment : null;
 
   issuesCache = {}; backlogByPerson = {}; backlogIssuesRaw = [];
-  activeSprintId = null; allContributors = new Set(); teamsByPerson = {}; allTeamNames = [];
+  allBoards = []; sprintsByBoard = {};
+  activeSprintId = null; activeBoardId = null;
+  allContributors = new Set(); teamsByPerson = {}; allTeamNames = [];
   accountIdToName = {}; activeTeamTab = preserveSelection ? prevTeamTab : null; excludedPeople = new Set();
   priorityIssues = []; allDepartments = [];
 
-  // Auto-detect Jira fields (story points, dept priority, submission, department)
+  // Auto-detect Jira fields
   const fieldIds = await discoverFields(cfg);
   cfg.storyPointsFields = fieldIds.storyPoints;
   cfg.deptPriorityField = fieldIds.deptPriority;
   cfg.submissionField   = fieldIds.submission;
   cfg.departmentField   = fieldIds.department;
 
-  const { boardId, sprints } = await getSprints(cfg);
-  activeBoardId = boardId;
+  // Load all scrum boards
+  allBoards = await getBoards(cfg);
+  if (!allBoards.length) throw new Error(`No scrum boards found for project "${cfg.projectKey}"`);
+
+  // Pick initial board: preserved > env override > saved > first
+  const envBoardId = (serverConfig && serverConfig.boardId) || cfg.boardId;
+  const savedBoardId = loadPref('boardId');
+  let initialBoard =
+    (prevBoardId && allBoards.find(b => b.id === prevBoardId)) ||
+    (envBoardId && allBoards.find(b => String(b.id) === String(envBoardId))) ||
+    (savedBoardId && allBoards.find(b => String(b.id) === savedBoardId)) ||
+    allBoards[0];
+  activeBoardId = initialBoard.id;
+  savePref('boardId', initialBoard.id);
+  console.log('[boards] using:', `${initialBoard.name} (id=${initialBoard.id})`);
+
+  // Sprints for the chosen board
+  const sprints = await getSprints(cfg, activeBoardId);
+  sprintsByBoard[activeBoardId] = sprints;
   activeSprints = sprints;
 
-  // Load project members
+  // Project-wide loads (members, teams, backlog) — don't depend on board
   await getProjectMembers(cfg);
-
-  // Load team assignments
   await loadTeams(cfg);
-
-  // Load backlog
-  const backlogIssues = await getBacklog(cfg, boardId);
+  const backlogIssues = await getBacklog(cfg, activeBoardId);
   backlogIssuesRaw = backlogIssues;
   backlogByPerson = processBacklog(backlogIssues, cfg.storyPointsFields);
 
-  // Pick the sprint to show: previously selected (if still present) > saved > active > first
-  const savedSprintId = loadPref('sprintId');
-  let firstSprint =
-    (prevSprintId && sprints.find(s => String(s.id) === String(prevSprintId))) ||
-    (savedSprintId && sprints.find(s => String(s.id) === savedSprintId)) ||
-    sprints.find(s => s.state === 'active') ||
-    sprints[0];
+  buildBoardTabs();
 
-  activeSprintId = firstSprint.id;
-  savePref('sprintId', firstSprint.id);
+  if (sprints.length) {
+    // Pick the sprint: preserved > per-board saved > active > first
+    const perBoardKey = 'sprintId:' + activeBoardId;
+    const perBoardSaved = loadPref(perBoardKey);
+    const globalSaved = loadPref('sprintId');
+    let firstSprint =
+      (prevSprintId && sprints.find(s => String(s.id) === String(prevSprintId))) ||
+      (perBoardSaved && sprints.find(s => String(s.id) === perBoardSaved)) ||
+      (globalSaved && sprints.find(s => String(s.id) === globalSaved)) ||
+      sprints.find(s => s.state === 'active') ||
+      sprints[0];
 
-  issuesCache[firstSprint.id] = await getIssues(cfg, boardId, firstSprint.id);
-  const sprintByPerson = processIssues(issuesCache[firstSprint.id], cfg.storyPointsFields);
+    activeSprintId = firstSprint.id;
+    savePref('sprintId', firstSprint.id);
+    savePref(perBoardKey, firstSprint.id);
 
-  const dates = firstSprint.startDate ? ` · ${firstSprint.startDate.slice(0,10)} – ${firstSprint.endDate.slice(0,10)}` : '';
-  renderDashboard(sprintByPerson, firstSprint.name + dates);
-  buildSprintSelector(sprints);
+    issuesCache[firstSprint.id] = await getIssues(cfg, activeBoardId, firstSprint.id);
+    const sprintByPerson = processIssues(issuesCache[firstSprint.id], cfg.storyPointsFields);
+
+    const dates = firstSprint.startDate ? ` · ${firstSprint.startDate.slice(0,10)} – ${firstSprint.endDate.slice(0,10)}` : '';
+    renderDashboard(sprintByPerson, firstSprint.name + dates);
+    buildSprintSelector(sprints);
+  } else {
+    document.getElementById('sprint-selector').innerHTML =
+      '<span class="sprint-empty">No sprints on this board</span>';
+    document.getElementById('teams-container').innerHTML = '';
+    document.getElementById('sprint-label').textContent = '—';
+  }
 
   // Restore top tab; if priority, refresh that view
   const savedTopTab = loadPref('topTab') || 'capacity';
   setTopTab(savedTopTab);
 
-  // If priority tab is active, restore department too
   if (savedTopTab === 'priority') {
     const savedDept = prevDepartment || loadPref('department');
     if (savedDept) activeDepartment = savedDept;

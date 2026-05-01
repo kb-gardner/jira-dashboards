@@ -9,6 +9,7 @@ async function selectSprint(sprint, btnEl) {
   }
   activeSprintId = sprint.id;
   savePref('sprintId', sprint.id);
+  if (activeBoardId != null) savePref('sprintId:' + activeBoardId, sprint.id);
   const sprintByPerson = processIssues(issuesCache[sprint.id], activeCfg.storyPointsFields);
   const dates = sprint.startDate ? ` · ${sprint.startDate.slice(0,10)} – ${sprint.endDate.slice(0,10)}` : '';
   renderDashboard(sprintByPerson, sprint.name + dates);
@@ -17,6 +18,10 @@ async function selectSprint(sprint, btnEl) {
 function buildSprintSelector(sprints) {
   const sel = document.getElementById('sprint-selector');
   sel.innerHTML = '';
+  if (!sprints.length) {
+    sel.innerHTML = '<span class="sprint-empty">No sprints on this board</span>';
+    return;
+  }
   const activeIdx = sprints.findIndex(s => String(s.id) === String(activeSprintId));
   const fallbackIdx = sprints.findIndex(s => s.state === 'active');
   const defaultIdx = activeIdx >= 0 ? activeIdx : (fallbackIdx >= 0 ? fallbackIdx : 0);

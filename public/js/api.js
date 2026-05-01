@@ -22,35 +22,28 @@ function jiraFetch(cfg, apiPath, opts = {}) {
   });
 }
 
-async function getSprints(cfg) {
-  setLoadingMsg('Finding boards...');
-  const boards = await jiraFetch(cfg, `/rest/agile/1.0/board?projectKeyOrId=${cfg.projectKey}&maxResults=60`);
-  if (!boards.values?.length) throw new Error(`No boards found for project "${cfg.projectKey}"`);
-
-  console.log('[boards] all:', boards.values.map(b => `${b.name} (id=${b.id}, type=${b.type})`));
-
-  // Pick a board: env override > saved preference > scrum board with most matching name > first scrum > first
-  const scrumBoards = boards.values.filter(b => b.type === 'scrum');
-  const candidates = scrumBoards.length ? scrumBoards : boards.values;
-
-  const envOverride = (serverConfig && serverConfig.boardId) || cfg.boardId;
-  const savedBoardId = loadPref('boardId');
-
-  let boardId;
-  if (envOverride) {
-    const m = candidates.find(b => String(b.id) === String(envOverride)) || boards.values.find(b => String(b.id) === String(envOverride));
-    boardId = m ? m.id : candidates[0].id;
-  } else if (savedBoardId) {
-    const m = candidates.find(b => String(b.id) === String(savedBoardId));
-    boardId = m ? m.id : candidates[0].id;
-  } else {
-    // Prefer a board whose name suggests it's the project's main tech board
-    const preferred = candidates.find(b => /tech|technology|engineering/i.test(b.name)) || candidates[0];
-    boardId = preferred.id;
+async function getBoards(cfg) {
+  setLoadingMsg('Loading boards...');
+  let all = [];
+  let startAt = 0;
+  const pageSize = 50;
+  while (true) {
+    const data = await jiraFetch(
+      cfg,
+      `/rest/agile/1.0/board?projectKeyOrId=${cfg.projectKey}&maxResults=${pageSize}&startAt=${startAt}`
+    );
+    const values = data.values || [];
+    all = all.concat(values);
+    if (data.isLast === true) break;
+    if (values.length < pageSize) break;
+    startAt += values.length;
+    if (startAt > 1000) break;
   }
-  const chosen = boards.values.find(b => b.id === boardId);
-  console.log('[boards] using:', chosen ? `${chosen.name} (id=${chosen.id}, type=${chosen.type})` : boardId);
+  console.log('[boards] all:', all.map(b => `${b.name} (id=${b.id}, type=${b.type})`));
+  return all.filter(b => b.type === 'scrum').sort((a, b) => a.name.localeCompare(b.name));
+}
 
+async function getSprints(cfg, boardId) {
   setLoadingMsg('Loading sprints...');
   let all = [];
   let startAt = 0;
@@ -62,17 +55,16 @@ async function getSprints(cfg) {
       `/rest/agile/1.0/board/${boardId}/sprint?state=active,closed,future&maxResults=${pageSize}&startAt=${startAt}`
     );
     const values = data.values || [];
-    console.log(`[sprints] page ${page} startAt=${startAt} got=${values.length} isLast=${data.isLast}`);
+    console.log(`[sprints board=${boardId}] page ${page} startAt=${startAt} got=${values.length} isLast=${data.isLast}`);
     all = all.concat(values);
     page += 1;
     if (data.isLast === true) break;
     if (values.length === 0) break;
     if (values.length < pageSize && data.isLast === undefined) break;
     startAt += values.length;
-    if (startAt > 5000) break; // safety bound
+    if (startAt > 5000) break;
   }
-  console.log(`[sprints] total=${all.length}`,
-    `future=${all.filter(s => s.state === 'future').length}`,
+  console.log(`[sprints board=${boardId}] total=${all.length} future=${all.filter(s => s.state === 'future').length}`,
     'future names:', all.filter(s => s.state === 'future').map(s => `${s.name} (${(s.startDate||'').slice(0,10)})`));
 
   const order = { closed: 0, active: 1, future: 2 };
@@ -82,9 +74,7 @@ async function getSprints(cfg) {
   );
   const closedSprints = all.filter(s => s.state === 'closed').slice(-3);
   const otherSprints = all.filter(s => s.state !== 'closed');
-  const sprints = [...closedSprints, ...otherSprints];
-  if (!sprints.length) throw new Error('No sprints found on this board');
-  return { boardId, sprints };
+  return [...closedSprints, ...otherSprints];
 }
 
 async function jqlSearch(cfg, jql, fields) {

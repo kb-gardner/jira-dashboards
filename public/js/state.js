@@ -16,10 +16,12 @@ const BAR_COLORS = { done: '#22C55E', inprog: '#F59E0B', todo: '#CBD5E1' };
 // ── Global state ─────────────────────────────────────────────────
 
 let activeCfg = null, activeBoardId = null, issuesCache = {};
+let allBoards = [];             // [{id, name, type}, ...] - scrum boards only
+let sprintsByBoard = {};        // { boardId: [sprints...] }
 let backlogByPerson = {};       // { name: pts }
 let backlogIssuesRaw = [];      // raw backlog issues for modal detail
 let activeSprintId = null;      // currently displayed sprint id
-let activeSprints = [];         // currently loaded sprints array
+let activeSprints = [];         // sprints for the currently active board
 let allContributors = new Set();
 let teamsByPerson = {};         // { personName: ['Team A', 'Team B'] }
 let allTeamNames = [];          // sorted team names

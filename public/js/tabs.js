@@ -8,8 +8,6 @@ function setTopTab(tabName) {
   });
   document.getElementById('capacity-view').style.display = tabName === 'capacity' ? '' : 'none';
   document.getElementById('priority-view').style.display = tabName === 'priority' ? '' : 'none';
-  // Sprint selector is irrelevant in priority view
-  document.getElementById('sprint-selector').style.display = tabName === 'capacity' ? '' : 'none';
 }
 
 document.querySelectorAll('.top-tab').forEach(btn => {

@@ -2,9 +2,11 @@ document.getElementById('btn-demo').addEventListener('click', () => {
   document.getElementById('config-error').style.display = 'none';
   document.getElementById('config-banner').style.display = 'none';
   activeCfg = {};
+  allBoards = []; sprintsByBoard = {};
   allContributors = new Set(); teamsByPerson = {}; allTeamNames = [];
   accountIdToName = {}; activeTeamTab = null; excludedPeople = new Set();
   backlogIssuesRaw = []; activeSprintId = null;
+  document.getElementById('board-tabs').style.display = 'none';
 
   backlogByPerson = {
     'Kyle Jensen':     5,  'Josiah Hepworth': 12, 'Maria Torres': 8,

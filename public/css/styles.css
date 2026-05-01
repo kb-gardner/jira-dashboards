@@ -78,7 +78,53 @@ header { display: flex; align-items: flex-start; justify-content: space-between;
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.sprint-selector { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+#board-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+  padding: 4px;
+  background: var(--surface2);
+  border-radius: 10px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+#board-tabs::-webkit-scrollbar { height: 4px; }
+#board-tabs::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.board-tab {
+  padding: 7px 16px;
+  border-radius: 8px;
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+.board-tab:hover { color: var(--text); background: rgba(255,255,255,0.6); }
+.board-tab.active {
+  background: var(--surface);
+  color: var(--accent);
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.sprint-selector {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+.sprint-empty {
+  font-size: 12px;
+  font-family: 'IBM Plex Mono', monospace;
+  color: var(--muted);
+  padding: 6px 0;
+}
 
 .sprint-btn {
   background: var(--surface2);
