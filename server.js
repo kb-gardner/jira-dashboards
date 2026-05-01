@@ -245,7 +245,10 @@ const server = http.createServer(async (req, res) => {
 
   fs.readFile(filePath, (err, data) => {
     if (err) { res.writeHead(404); res.end('Not found'); return; }
-    res.writeHead(200, { 'Content-Type': MIME[path.extname(filePath)] || 'application/octet-stream' });
+    res.writeHead(200, {
+      'Content-Type': MIME[path.extname(filePath)] || 'application/octet-stream',
+      'Cache-Control': 'no-cache, must-revalidate',
+    });
     res.end(data);
   });
 });
