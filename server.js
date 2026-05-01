@@ -18,6 +18,7 @@ const JIRA_SP_FIELD = process.env.JIRA_SP_FIELD || '';
 const JIRA_DEPT_PRIORITY_FIELD = process.env.JIRA_DEPT_PRIORITY_FIELD || '';
 const JIRA_SUBMISSION_FIELD = process.env.JIRA_SUBMISSION_FIELD || '';
 const JIRA_DEPARTMENT_FIELD = process.env.JIRA_DEPARTMENT_FIELD || '';
+const JIRA_BOARD_ID = process.env.JIRA_BOARD_ID || '';
 const HAS_AUTH = !!(JIRA_EMAIL && JIRA_TOKEN);
 
 // Static dashboard password
@@ -190,6 +191,7 @@ const server = http.createServer(async (req, res) => {
       deptPriorityField: JIRA_DEPT_PRIORITY_FIELD,
       submissionField: JIRA_SUBMISSION_FIELD,
       departmentField: JIRA_DEPARTMENT_FIELD,
+      boardId: JIRA_BOARD_ID,
     }));
     return;
   }

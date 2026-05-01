@@ -26,7 +26,30 @@ async function getSprints(cfg) {
   setLoadingMsg('Finding boards...');
   const boards = await jiraFetch(cfg, `/rest/agile/1.0/board?projectKeyOrId=${cfg.projectKey}&maxResults=60`);
   if (!boards.values?.length) throw new Error(`No boards found for project "${cfg.projectKey}"`);
-  const boardId = boards.values[0].id;
+
+  console.log('[boards] all:', boards.values.map(b => `${b.name} (id=${b.id}, type=${b.type})`));
+
+  // Pick a board: env override > saved preference > scrum board with most matching name > first scrum > first
+  const scrumBoards = boards.values.filter(b => b.type === 'scrum');
+  const candidates = scrumBoards.length ? scrumBoards : boards.values;
+
+  const envOverride = (serverConfig && serverConfig.boardId) || cfg.boardId;
+  const savedBoardId = loadPref('boardId');
+
+  let boardId;
+  if (envOverride) {
+    const m = candidates.find(b => String(b.id) === String(envOverride)) || boards.values.find(b => String(b.id) === String(envOverride));
+    boardId = m ? m.id : candidates[0].id;
+  } else if (savedBoardId) {
+    const m = candidates.find(b => String(b.id) === String(savedBoardId));
+    boardId = m ? m.id : candidates[0].id;
+  } else {
+    // Prefer a board whose name suggests it's the project's main tech board
+    const preferred = candidates.find(b => /tech|technology|engineering/i.test(b.name)) || candidates[0];
+    boardId = preferred.id;
+  }
+  const chosen = boards.values.find(b => b.id === boardId);
+  console.log('[boards] using:', chosen ? `${chosen.name} (id=${chosen.id}, type=${chosen.type})` : boardId);
 
   setLoadingMsg('Loading sprints...');
   let all = [];
