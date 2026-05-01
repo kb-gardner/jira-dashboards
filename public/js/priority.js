@@ -239,43 +239,50 @@ async function onDrop(e) {
 }
 
 // Cascade rule:
-//   - Source keeps its priority value.
-//   - When source moves UP (toIdx < fromIdx): the rows that got displaced down
-//     ([toIdx+1 .. fromIdx]) must each have priority >= a running floor that
-//     starts at source.priority and only increases.
-//   - When source moves DOWN (toIdx > fromIdx): the rows that got displaced up
-//     ([fromIdx .. toIdx-1]) must each have priority <= a running ceiling that
-//     starts at source.priority and only decreases.
-//   - Rows with null priority are skipped (don't constrain or get changed).
+//   - Source ADOPTS the priority of the row it lands next to (the row that gets
+//     displaced by the insertion): the post-splice neighbor at toIdx+1 (move up)
+//     or toIdx-1 (move down).
+//   - Every skipped row shifts by 1 in the opposite direction:
+//     move up   → skipped rows [toIdx+1 .. fromIdx] each +1
+//     move down → skipped rows [fromIdx .. toIdx-1] each -1 (clamped to >= 1)
+//   - Rows with null priority are not changed and don't contribute to adoption.
 async function applyMove(fromIdx, toIdx) {
   const arr = priorityIssues.slice();
   const source = arr[fromIdx];
   arr.splice(fromIdx, 1);
   arr.splice(toIdx, 0, source);
 
+  // Snapshot original priorities so the cascade reads pre-move values.
+  const oldP = new Map();
+  priorityIssues.forEach(i => oldP.set(i.key, i._priority));
+
   const updates = [];
-  if (source._priority != null) {
-    if (toIdx < fromIdx) {
-      let floor = source._priority;
-      for (let k = toIdx + 1; k <= fromIdx; k++) {
-        const cur = arr[k]._priority;
-        if (cur == null) continue;
-        if (cur < floor) {
-          updates.push({ issue: arr[k], oldP: cur, newP: floor });
-        } else if (cur > floor) {
-          floor = cur;
-        }
-      }
-    } else if (toIdx > fromIdx) {
-      let ceiling = source._priority;
-      for (let k = toIdx - 1; k >= fromIdx; k--) {
-        const cur = arr[k]._priority;
-        if (cur == null) continue;
-        if (cur > ceiling) {
-          updates.push({ issue: arr[k], oldP: cur, newP: ceiling });
-        } else if (cur < ceiling) {
-          ceiling = cur;
-        }
+
+  if (toIdx < fromIdx) {
+    const adoptFrom = arr[toIdx + 1];
+    const adopted = oldP.get(adoptFrom.key);
+    if (adopted !== oldP.get(source.key)) {
+      updates.push({ issue: source, oldP: oldP.get(source.key), newP: adopted });
+    }
+    for (let k = toIdx + 1; k <= fromIdx; k++) {
+      const item = arr[k];
+      const cur = oldP.get(item.key);
+      if (cur == null) continue;
+      updates.push({ issue: item, oldP: cur, newP: cur + 1 });
+    }
+  } else if (toIdx > fromIdx) {
+    const adoptFrom = arr[toIdx - 1];
+    const adopted = oldP.get(adoptFrom.key);
+    if (adopted !== oldP.get(source.key)) {
+      updates.push({ issue: source, oldP: oldP.get(source.key), newP: adopted });
+    }
+    for (let k = fromIdx; k < toIdx; k++) {
+      const item = arr[k];
+      const cur = oldP.get(item.key);
+      if (cur == null) continue;
+      const newP = Math.max(1, cur - 1);
+      if (newP !== cur) {
+        updates.push({ issue: item, oldP: cur, newP });
       }
     }
   }
