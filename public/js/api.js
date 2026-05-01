@@ -32,17 +32,25 @@ async function getSprints(cfg) {
   let all = [];
   let startAt = 0;
   const pageSize = 50;
+  let page = 0;
   while (true) {
     const data = await jiraFetch(
       cfg,
       `/rest/agile/1.0/board/${boardId}/sprint?state=active,closed,future&maxResults=${pageSize}&startAt=${startAt}`
     );
     const values = data.values || [];
+    console.log(`[sprints] page ${page} startAt=${startAt} got=${values.length} isLast=${data.isLast}`);
     all = all.concat(values);
-    if (data.isLast || values.length < pageSize) break;
+    page += 1;
+    if (data.isLast === true) break;
+    if (values.length === 0) break;
+    if (values.length < pageSize && data.isLast === undefined) break;
     startAt += values.length;
     if (startAt > 5000) break; // safety bound
   }
+  console.log(`[sprints] total=${all.length}`,
+    `future=${all.filter(s => s.state === 'future').length}`,
+    'future names:', all.filter(s => s.state === 'future').map(s => `${s.name} (${(s.startDate||'').slice(0,10)})`));
 
   const order = { closed: 0, active: 1, future: 2 };
   all.sort((a, b) =>
