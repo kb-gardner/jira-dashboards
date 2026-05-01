@@ -27,10 +27,28 @@ async function getSprints(cfg) {
   const boards = await jiraFetch(cfg, `/rest/agile/1.0/board?projectKeyOrId=${cfg.projectKey}&maxResults=60`);
   if (!boards.values?.length) throw new Error(`No boards found for project "${cfg.projectKey}"`);
   const boardId = boards.values[0].id;
+
   setLoadingMsg('Loading sprints...');
-  const data = await jiraFetch(cfg, `/rest/agile/1.0/board/${boardId}/sprint?state=active,closed,future&maxResults=60`);
+  let all = [];
+  let startAt = 0;
+  const pageSize = 50;
+  while (true) {
+    const data = await jiraFetch(
+      cfg,
+      `/rest/agile/1.0/board/${boardId}/sprint?state=active,closed,future&maxResults=${pageSize}&startAt=${startAt}`
+    );
+    const values = data.values || [];
+    all = all.concat(values);
+    if (data.isLast || values.length < pageSize) break;
+    startAt += values.length;
+    if (startAt > 5000) break; // safety bound
+  }
+
   const order = { closed: 0, active: 1, future: 2 };
-  const all = (data.values || []).sort((a, b) => (order[a.state] ?? 0) - (order[b.state] ?? 0) || new Date(a.startDate || 0) - new Date(b.startDate || 0));
+  all.sort((a, b) =>
+    (order[a.state] ?? 0) - (order[b.state] ?? 0) ||
+    new Date(a.startDate || 0) - new Date(b.startDate || 0)
+  );
   const closedSprints = all.filter(s => s.state === 'closed').slice(-3);
   const otherSprints = all.filter(s => s.state !== 'closed');
   const sprints = [...closedSprints, ...otherSprints];
