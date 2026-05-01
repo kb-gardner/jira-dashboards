@@ -105,30 +105,65 @@ async function getBacklog(cfg, boardId) {
 async function getDepartmentOptions(cfg) {
   setLoadingMsg('Loading departments...');
   if (!cfg.departmentField) return [];
-  // Use Jira autocomplete suggestions for the field — much cheaper than aggregating from issues.
+  const fieldId = cfg.departmentField;
+  const set = new Set();
+
+  // 1. Field context options — pulled straight from field config, always fresh
+  try {
+    const ctxResp = await jiraFetch(cfg, `/rest/api/3/field/${fieldId}/context`);
+    const contexts = ctxResp.values || [];
+    for (const ctx of contexts) {
+      let startAt = 0;
+      while (true) {
+        const opts = await jiraFetch(
+          cfg,
+          `/rest/api/3/field/${fieldId}/context/${ctx.id}/option?maxResults=100&startAt=${startAt}`
+        );
+        const values = opts.values || [];
+        values.forEach(o => {
+          if (o.value && !o.disabled) set.add(o.value);
+        });
+        if (opts.isLast === true || values.length < 100) break;
+        startAt += values.length;
+        if (startAt > 5000) break;
+      }
+    }
+    if (set.size) {
+      console.log(`[departments] context-options got ${set.size}`);
+      return [...set].sort((a, b) => a.localeCompare(b));
+    }
+  } catch (e) {
+    console.warn('Field context options failed, falling back to autocomplete:', e.message);
+  }
+
+  // 2. Fallback: JQL autocomplete suggestions
   try {
     const data = await jiraFetch(cfg, `/rest/api/3/jql/autocompletedata/suggestions?fieldName=${encodeURIComponent('Department')}`);
     const results = (data && data.results) || [];
-    // Prefer displayName (human label) over value (which is JQL-formatted: quoted if it has spaces).
-    const values = results
-      .map(r => r.displayName || stripJqlQuotes(r.value))
-      .filter(Boolean);
-    if (values.length) return values.sort((a, b) => a.localeCompare(b));
+    results.forEach(r => {
+      const v = r.displayName || stripJqlQuotes(r.value);
+      if (v) set.add(v);
+    });
+    if (set.size) {
+      console.log(`[departments] autocomplete got ${set.size}`);
+      return [...set].sort((a, b) => a.localeCompare(b));
+    }
   } catch (e) {
     console.warn('Department autocomplete failed, falling back to issue scan:', e.message);
   }
-  // Fallback: scan issues with department set
+
+  // 3. Last resort: scan issues
   const issues = await jqlSearch(
     cfg,
     `project=${cfg.projectKey} AND "Department" is not EMPTY`,
-    cfg.departmentField
+    fieldId
   );
-  const set = new Set();
   issues.forEach(i => {
-    const v = i.fields[cfg.departmentField];
+    const v = i.fields[fieldId];
     const value = Array.isArray(v) ? v.map(x => x.value || x.name || x).join(', ') : (v && (v.value || v.name)) || v;
     if (value) set.add(value);
   });
+  console.log(`[departments] issue-scan got ${set.size}`);
   return [...set].sort((a, b) => a.localeCompare(b));
 }
 
