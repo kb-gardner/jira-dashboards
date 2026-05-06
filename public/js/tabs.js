@@ -1,4 +1,6 @@
 function setTopTab(tabName) {
+  const role = serverConfig && serverConfig.role;
+  if (role === 'pm') tabName = 'priority';
   if (tabName !== 'capacity' && tabName !== 'priority') tabName = 'capacity';
   activeTopTab = tabName;
   savePref('topTab', tabName);

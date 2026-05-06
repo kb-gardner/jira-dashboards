@@ -194,6 +194,12 @@ if (location.protocol === 'file:') {
 } else {
   fetch('/config').then(function(r){ return r.json(); }).then(function(cfg){
     serverConfig = cfg;
+    if (cfg.role === 'pm') {
+      var capTab = document.querySelector('.top-tab[data-top-tab="capacity"]');
+      if (capTab) capTab.style.display = 'none';
+      var reconfig = document.getElementById('btn-reconfigure');
+      if (reconfig) reconfig.style.display = 'none';
+    }
     if (cfg.hasAuth) {
       document.querySelectorAll('#cfg-email, #cfg-token').forEach(function(el){
         el.closest('.config-field').style.display = 'none';

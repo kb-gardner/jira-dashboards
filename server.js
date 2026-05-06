@@ -21,9 +21,18 @@ const JIRA_DEPARTMENT_FIELD = process.env.JIRA_DEPARTMENT_FIELD || '';
 const JIRA_BOARD_ID = process.env.JIRA_BOARD_ID || '';
 const HAS_AUTH = !!(JIRA_EMAIL && JIRA_TOKEN);
 
-// Static dashboard password
+// Static dashboard passwords — one per role
 const DASHBOARD_PASSWORD = process.env.DASHBOARD_PASSWORD || 'yomama';
-const PASSWORD_HASH = crypto.createHash('sha256').update(DASHBOARD_PASSWORD).digest('hex');
+const DASHBOARD_PM_PASSWORD = process.env.DASHBOARD_PM_PASSWORD || 'pmuser';
+const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
+const ROLE_BY_HASH = {
+  [sha256(DASHBOARD_PASSWORD)]: 'admin',
+  [sha256(DASHBOARD_PM_PASSWORD)]: 'pm',
+};
+const ROLE_BY_PASSWORD = {
+  [DASHBOARD_PASSWORD]: 'admin',
+  [DASHBOARD_PM_PASSWORD]: 'pm',
+};
 const COOKIE_NAME = 'dash_auth';
 
 const MIME = {
@@ -53,9 +62,14 @@ function parseCookies(header) {
   return out;
 }
 
-function isAuthenticated(req) {
+function getRole(req) {
   const cookies = parseCookies(req.headers.cookie || '');
-  return cookies[COOKIE_NAME] === PASSWORD_HASH;
+  const hash = cookies[COOKIE_NAME];
+  return hash ? (ROLE_BY_HASH[hash] || null) : null;
+}
+
+function isAuthenticated(req) {
+  return getRole(req) !== null;
 }
 
 function loginPage(error) {
@@ -142,8 +156,9 @@ const server = http.createServer(async (req, res) => {
       const body = (await readBody(req)).toString('utf8');
       const params = new URLSearchParams(body);
       const password = params.get('password') || '';
-      if (password === DASHBOARD_PASSWORD) {
-        const cookie = `${COOKIE_NAME}=${PASSWORD_HASH}; HttpOnly; Path=/; Max-Age=2592000; SameSite=Lax`;
+      if (password && ROLE_BY_PASSWORD[password]) {
+        const hash = sha256(password);
+        const cookie = `${COOKIE_NAME}=${hash}; HttpOnly; Path=/; Max-Age=2592000; SameSite=Lax`;
         res.writeHead(302, { 'Set-Cookie': cookie, 'Location': '/' });
         res.end();
         return;
@@ -183,6 +198,7 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
       hasAuth: HAS_AUTH,
+      role: getRole(req),
       baseUrl: JIRA_BASE_URL,
       orgId: JIRA_ORG_ID,
       siteId: JIRA_SITE_ID,
